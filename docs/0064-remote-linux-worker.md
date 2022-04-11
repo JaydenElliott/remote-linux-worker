@@ -23,7 +23,12 @@ This library/client product will do this through a lightweight gRPC API with the
 
 #### High level details
 
-todo!
+
+At a high level, the library is responsible for providing a server that processes requests to start, stop, query and stream the output of bash jobs. 
+
+The server will store a hashmap of client id's keys, with the respective value representing a vector of jobs objects (status, job result, job output).
+
+TODO: Show data structure
 
 #### Interface
 
@@ -74,7 +79,13 @@ todo!
 
 #### Library
 
-todo!
+- The server should have the option to manually configure the TLS settings.
+  - A client may want to use TLS 1.2 due to compatibility with their custom client implementation.
+  - A client may want to use different private key encryption standards.
+- The server should have added security mechanisms such as DDOS protection through connection and rate limits on requests.
+- The server should have the option to pipe logs to file and configure logs.
+
+
 
 #### Security
 
