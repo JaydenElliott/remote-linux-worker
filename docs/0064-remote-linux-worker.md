@@ -266,13 +266,15 @@ Clients will also only be authorized to stop, query, list and stream their jobs 
 
 #### Library
 
+- All the user data (job information, who is a valid user), should be stored in a database.
+  - This will allow for persistent sessions.
+  - This will increase the security of sensitive information.
 - The server should have the option to manually configure the TLS settings.
-  - A client may want to use TLS 1.2 due to compatibility with their custom client implementation.
-  - A client may want to use different private key encryption standards.
+  - A user may want to use TLS 1.2 due to compatibility with their custom client implementation.
+  - A user may want to use different private key encryption standards.
 - The server should have added security mechanisms such as DDOS protection through connection and rate limits on requests.
 - The server should have the option to pipe logs to file and configure logs.
-
-- TODO (replace server memory with a Database)
+  
 
 #### Security
 
@@ -286,13 +288,17 @@ Other changes to the private-key implementation that would increase security are
 
 Certificates
 - Self-signing certificates are not secure. The following would help increase security:
-  - Obtaining certificates from a reliable CA would be required at production.
+  - Obtaining certificates from a reliable CA would be required in production.
   - Public key pinning.
     - Reduces attack surface significantly but requires a significant amount of time and expertise to configure correctly.
 
 
-Authorization
-todo!
+The current authorization scheme is limited in usefulness and provides significant security risks.
+- Using an embedded name to verify a client is extremely sensitive to breaches. A simple brute force algorithm would be effective in bypassing this.
+
+The following would help increase authorization security. 
+- Using a username/password login, OAUTH, JWTs or 2 factor auth.
+- Pairing above with a database would also allow client sessions to be persistent across multiple sessions.
 
 #### External Dependency - Tonic
 
