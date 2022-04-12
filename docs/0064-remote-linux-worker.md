@@ -129,8 +129,6 @@ message StartResponse {
 
 Stopping a job requires the uuid gathered in the StartResponse. The user has the option to gracefully kill the process, allowing the program to process to handle the request.
 
- It should be noted that when using SIGTERM (graceful = true), the process has the option to ignore the signal, thus if your process is persistently not stopping it is recommended to set graceful to false. 
-
 ```proto
 // StopRequest describes StopRequest
 message StopRequest {
@@ -142,6 +140,8 @@ message StopRequest {
   bool graceful = 2;
 }
 ```
+
+It should be noted that when using SIGTERM (graceful = true), the process has the option to ignore the signal, thus if your process is persistently not stopping it is recommended to set graceful to false. 
 
 StopRequest returns the `google.protobuf.Empty` type. The client can asynchronously check the exit status of the process using the [StatusRequest](#status). The reason for this design is that in the event a process takes takes awhile or refuses to shutdown, the client should be non-blocked and able to make other requests. 
 
@@ -168,8 +168,6 @@ message StreamResponse {
 ```
 
 #### Status
-
-A client would send a `StatusRequest` when they want to parse the output of a job, check if the job is running or verify that a job shutdown successfully. 
 
 Querying the status of a job requires the uuid gathered in the StartResponse:
 
@@ -218,7 +216,7 @@ let stdout_reader = BufReader::new(response.stdout_output.as_slice());
 
 ### ListJobs
 
-A `ListRequest` will return the client's job history and currently running jobs. This is useful if a client wants to obtain the status of a job but lost the UUID obtained from a `StartRequest`.
+A `ListRequest` will return the client's job history and currently running jobs. 
 
 No input is required to make this request.
 
@@ -239,7 +237,7 @@ message ListJobsResponse {
 
 ### CLI
 
-todo!
+
 
 ### Security
 
@@ -255,8 +253,6 @@ todo!
 todo!
 
 #### Auth Scheme
-
-todo!
 
 
 ### Trade-offs and Future Considerations
