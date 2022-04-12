@@ -252,8 +252,15 @@ message ListJobsResponse {
 
 todo!
 
-#### Auth Scheme
+#### Authorization Scheme
 
+When the server receives a request, it will do the following:
+1. Verify the client's certificate.
+2. Parse the client's name from the certificate.
+3. Check the name against a list of authorized users stored in server memory. 
+4. If they exist then continue. If they do not exist, return an unauthorized error.
+
+Clients will also only be authorized to stop, query, list and stream their jobs only.
 
 ### Trade-offs and Future Considerations
 
@@ -265,7 +272,7 @@ todo!
 - The server should have added security mechanisms such as DDOS protection through connection and rate limits on requests.
 - The server should have the option to pipe logs to file and configure logs.
 
-
+- TODO (replace server memory with a Database)
 
 #### Security
 
