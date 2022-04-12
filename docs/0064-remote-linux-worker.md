@@ -308,9 +308,8 @@ Pros:
 - Time saved with client/server setup and integration with the generated gRPC code.
 
 Cons: 
-- `tonic` version 0.7.0 removed the ability to configure the TLS version and cipher suites using `rustls`. Because `tonic` will not allow you to do this manually, the only options are very convoluted workarounds, which are messy and not intended to be used. Because of this, an older version of `tonic` will be required.
+- `tonic`  v0.7.0 removed the ability to configure the TLS version and cipher suites using `rustls`. Because `tonic` will not allow you to do this manually, the only options are convoluted workarounds, which are messy and not intended to be used. Because of this, an older version of `tonic` will be required.
   - This is not a viable option for production.
-  - For a larger project with more time, setting up the server from scratch may a be a better option to solve this issue and also give more configurability and a smaller dependency list. 
-    - Reaching the
+  - For a larger project with more time, setting up the server from scratch would be a better option in order to solve this issue and provide more configurability.
 
 
