@@ -96,7 +96,7 @@ service JobProcessorService {
 
 #### Start
 Start will begin a new job using the command and arguments specified.
-```
+```proto
 // StartRequest describes StartRequest
 message StartRequest {
   // command is the path to the script or the native linux command to execute
@@ -115,9 +115,9 @@ let request = Request::new(StartRequest{
 })
 ```
 
-The response is a uuid generated for that job.
+The response is a UUID generated for that job.
 
-```
+```proto
 // StartResponse describes StartResponse
 message StartResponse {
   // uuid is the unique identifier of the job started 
@@ -131,7 +131,7 @@ Stopping a job requires the uuid gathered in the StartResponse. The user has the
 
  It should be noted that when using SIGTERM (graceful = true), the process has the option to ignore the signal, thus if your process is persistently not stopping it is recommended to set graceful to false. 
 
-```
+```proto
 // StopRequest describes StopRequest
 message StopRequest {
   // uuid is the unique identifier of the job process to stop
@@ -143,10 +143,100 @@ message StopRequest {
 }
 ```
 
-StopRequest returns the `google.protobuf.Empty` type. The client can asynchronously check if the process is running or the exit code using the [StatusRequest](#status).
+StopRequest returns the `google.protobuf.Empty` type. The client can asynchronously check the exit status of the process using the [StatusRequest](#status). The reason for this design is that in the event a process takes takes awhile or refuses to shutdown, the client should be non-blocked and able to make other requests. 
 
+#### Stream
+
+Making a StreamRequest for a job will initially return the stdout and stderr output that was saved from the job's inception. It will then continue to stream all the job's new stdout/stderr messages until the job is finished or shutdown.
+
+```proto
+
+// StartResponse describes StartResponse
+message StartResponse {
+  // uuid is the unique identifier of the job started 
+  string uuid = 1;
+}
+
+// StreamResponse describes StreamResponse
+message StreamResponse {
+  // stdout_output defines the stdout content being streamed to the client
+  bytes stdout_output = 1;
+    
+  // stderr_output defines the stderr content being streamed to the client
+  bytes stderr_output = 2;
+}
+```
 
 #### Status
+
+A client would send a `StatusRequest` when they want to parse the output of a job, check if the job is running or verify that a job shutdown successfully. 
+
+Querying the status of a job requires the uuid gathered in the StartResponse:
+
+```proto
+// StatusRequest describes StatusRequest
+message StatusRequest {
+  // uuid is the unique identifier of the job process to query
+  string uuid = 1;
+}
+```
+
+The response contains useful process metadata:
+
+```proto
+// StatusResponse describes StatusResponse
+message StatusResponse {
+  // running defines if a job is currently running
+  bool running = 1;
+
+  // exit_code represents the exit_code of the job if the underlying process has finished
+  uint32 exit_code = 2; 
+
+  // stderr_output is the standard error output of the job
+  bytes stderr_output = 3;
+
+  // stdout_output is the standard output of the job
+  bytes stdout_output = 4;
+}
+
+```
+
+A client-side example of processing stderr or stdout may look like:
+
+```rust
+
+let request = Request::new(StatusRequest {uuid: job_uuid});
+let response = client.status_request(request).await?
+
+let stdout_reader = BufReader::new(response.stdout_output.as_slice());
+    let lines = stdout_reader.lines();
+    for output in lines {
+        println!("stdout item: {:?}", output);
+    }
+
+```
+
+### ListJobs
+
+A `ListRequest` will return the client's job history and currently running jobs. This is useful if a client wants to obtain the status of a job but lost the UUID obtained from a `StartRequest`.
+
+No input is required to make this request.
+
+```proto
+// ListJobsResponse describes ListJobsResponse
+message ListJobsResponse {
+  // current defines a list of uuids representing the current 
+  // job processes running
+  repeated string current = 1;
+
+  // previous defines a list of uuids representing the previous
+  // job processes that have finished or shutdown.
+  repeated string previous = 2;
+}
+
+```
+
+
 ### CLI
 
 todo!
