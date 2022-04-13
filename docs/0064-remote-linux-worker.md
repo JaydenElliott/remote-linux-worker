@@ -40,7 +40,6 @@ and a function to run the server:
 ```rust
 pub async fn run(&self) -> Result<(), ServerError>>
 ```
-
 When called, a gRPC server will be initialized with the parsed configuration settings and begin handling incoming requests. The user of this library will be required to implement an async runtime for their `main()` function; for this `tokio` is recommended. Example usage:
 
 ```rust
@@ -315,20 +314,29 @@ List
 $ rlw-client list
 ```
 
-
-
 ### Security
 
 #### Transport Encryption
+
+See [Security Trade-offs](#security-1) for tradeoffs regarding these points.
+
+
+mTLS
 - The gRPC API uses mTLS to authenticate the connection between the server and client.
-- The server and client will use TLS 1.3 to establish a secure connection (see [Security Trade-offs](#security-1)).
+  - A certificate chain of size two will be used.
+  - Each client and the sever will be provided a certificate signed by a custom self-signed 'root' certificate.
+  - During the handshake, the client will authenticate the servers certificate against the root.
+  - The server will then authenticate the client's certificate.
+
+TLS Configuration
+- The server and client will use TLS 1.3 to establish a secure connection.  
+- The server will require the use of 2048-bit PKCS#8 RSA keys.
 - The server will enable the following ciphers suites. 
   - TLS_AES_128_GCM_SHA256,
   - TLS_AES_256_GCM_SHA384,
   - TLS_CHACHA20_POLY1305_SHA256
 - From the list of available TLS 1.3 cipher suites these are the most secure as they implement Perfect Forward Secrecy. 
 - Also, it is a requirement in the IETF TLS 1.3 Standard that to be to be TLS-compliant you must implement the above cipher suites (see [TLS 1.3 Standard Sec 9.1](https://datatracker.ietf.org/doc/html/rfc8446#section-9.1)). 
-
 
 #### Authorization Scheme
 
@@ -348,6 +356,12 @@ Clients will also only be authorized to stop, query, list and stream jobs they t
   - This will allow for persistent sessions.
   - This will increase the security of sensitive information.
   
+- The server should provide an option to execute the client's commands in a virtual runtime environment. This would be useful for the following reasons:
+    - A library user may not want the client executing commands within their server.
+    - This decrease the damage done by the execution of malicious binaries / commands.
+  - Giving the client access to a specific subset of the filesystem using access-control-lists could provide similar functionality.
+
+
 #### Security
 
 ECDSA keys would be preferred over RSA Keys.
@@ -365,6 +379,7 @@ Certificates
     - Reduces attack surface significantly but requires a significant amount of time and expertise to configure correctly.
     - If not done correctly this could lead to considerable server down time.
     - Is only viable if you have a very large user space and you are concerned about being attacked by a fraudulent certificate.
+- The application's security would benefit from building a stronger chain of trust using a larger number of intermediary CAs.
 
 TLS Configuration
 - TLS 1.3 is used over TLS.2 due to decreased latency and increased security.
@@ -379,6 +394,8 @@ Using an embedded name to verify a client is sensitive to breaches.The following
 
 DDOS Protection
 - The server should have added security mechanisms such as DDOS protection through connection and rate limits on requests.
+
+
 
 #### External Dependency - Tonic
 
