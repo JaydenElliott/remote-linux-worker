@@ -8,23 +8,20 @@ state: draft
 
 ## What
 
-A lightweight remote linux process execution server-side library and client CLI.
+A remote linux process execution server-side library and client CLI. The library/client will have a strong focus on transport layer security and the ability to manage access control.
 
 ## Why
 
 Customers have expressed interest in a product that allows their clients to run commands on a server in a controlled and secure way.
 
-Outlined below is a proposed library and client CLI solution that will achieve this goal through a gRPC API with strong connection security and the ability to manage access control.
-
-
 ## Details
 
 ### Library
 
-#### High level details
+#### High Level Details
 
 
-The library is responsible for providing a gRPC server that processes requests to `start`, `stop`, `query` and `stream` the output of Linux process jobs. Refer to [API](#api) for an overview of the exposed API features.
+The library is responsible for providing a gRPC server that processes requests to `start`, `stop`, `list`, `query`, and `stream` the output of Linux process jobs. Refer to [API](#api) for an overview of the exposed API features.
 
 #### Interface
 
@@ -40,7 +37,7 @@ and a function to run the server:
 ```rust
 pub async fn run(&self) -> Result<(), ServerError>>
 ```
-When called, a gRPC server will be initialized with the parsed configuration settings and begin handling incoming requests. The user of this library will be required to implement an async runtime for their `main()` function; for this `tokio` is recommended. Example usage:
+When called, a gRPC server will be initialized with the parsed configuration settings and begin handling incoming requests. The user of this library will be required to implement an async runtime; for this `tokio` is recommended. Example usage:
 
 ```rust
 #[tokio::main]
@@ -55,7 +52,7 @@ The library also exports the struct `ServerSettings`:
 ```rust
 pub struct ServerSettings {
     // TODO: Add extra configuration options:
-    // - Request rate limits for DDOS protection
+    // - Rate limits on requests, for DDOS protection
     // - Option to pipe logs to file (https://docs.rs/log4rs/1.0.0/log4rs/)
     // - Option to manually configure TLS:
     //    - to use TLS v1.2 for an old client implementation
@@ -87,8 +84,8 @@ Note: `tonic` and `rustls` will not use their latest version, see [Trade-Offs To
 
 The gRPC API will expose a single service `JobProcessorService`: 
 ```proto
-// JobProcessorService describes an API interface to perform start, stop, stream 
-// and status query requests for Linux process jobs.
+// JobProcessorService describes an API interface to perform start, stop, stream, 
+// list and status requests for Linux process jobs.
 service JobProcessorService {
   // Start starts a new process job
   rpc Start(StartRequest) returns(StartResponse);
@@ -141,7 +138,7 @@ message StartResponse {
 
 #### Stop
 
-Stopping a job requires the UUID gathered in the StartResponse. The user has the option to kill the process gracefully. This will give the process time to internally handle the kill request.
+Stopping a job requires the UUID returned in the StartResponse. The user has the option to kill the process gracefully. This will give the process time to internally handle the kill request.
 
 ```proto
 // StopRequest describes StopRequest
@@ -296,7 +293,7 @@ $ rlw-client start -c ls -- -a -l
 
 Stop
 ```
-$ rlw-client stop -f -u 0bcb5f36-b2d3-493e-9d76-f650ba225c5d
+$ rlw-client stop -u 0bcb5f36-b2d3-493e-9d76-f650ba225c5d -f
 ```
 
 Stream
@@ -335,7 +332,7 @@ TLS Configuration
 - From the list of available TLS 1.3 cipher suites these are the most secure as they implement Perfect Forward Secrecy. 
 - Also, it is a requirement in the IETF TLS 1.3 Standard that to be to be TLS-compliant you must implement the above cipher suites (see [TLS 1.3 Standard Sec 9.1](https://datatracker.ietf.org/doc/html/rfc8446#section-9.1)). 
 
-See [Security Trade-offs](#security-1) for tradeoffs regarding these points.
+See [Security Trade-offs](#security-1) for trade-offs regarding these points.
 
 #### Authorization Scheme
 
@@ -345,7 +342,7 @@ When the server receives a request, it will do the following:
 3. Check the name against a list of authorized users stored in server memory. 
 4. If they exist then continue. If they do not exist, return an unauthorized error.
 
-Clients will also only be authorized to stop, query, list and stream jobs they themselves have started.
+Clients will only be authorized to stop, query, list and stream jobs they themselves have started.
 
 ### Trade-offs and Future Considerations
 
@@ -357,7 +354,7 @@ Clients will also only be authorized to stop, query, list and stream jobs they t
   
 - The server should provide an option to execute the client's commands in a virtual runtime environment. This would be useful for the following reasons:
     - A library user may not want the client executing commands within their server.
-    - This decreases the damage done by the execution of malicious binaries / commands.
+    - This decreases the potential damage done by the execution of malicious binaries / commands.
   - Giving the client access to a specific subset of the filesystem using access-control-lists could provide similar functionality.
 
 
@@ -382,12 +379,12 @@ Certificates
 TLS Configuration
 - TLS 1.3 is used over TLS.2 due to decreased latency and increased security.
 - A trade off is that custom client implementations may not support TLS 1.3.
-  - Allowing configurable TLS versions would solve this, however the decreased security does need to be taken into consideration.  
+  - Allowing configurable TLS versions would solve this, however the cost of decreased security does need to be taken into consideration.  
 
 Authorization
-Using an embedded name to verify a client is sensitive to breaches. The following would help increase authorization security: 
-- Using a username/password login, OAUTH, JWTs or 2FA.
-- Pairing the above with a database would also allow client sessions to be persistent across multiple sessions.
+- Embedding a name within a certificate to verify a client is sensitive to brute force breaches. The following would help increase authorization security: 
+  - Using a username/password login, OAUTH, JWTs or 2FA.
+  - Pairing the above with a database would allow client sessions to be persistent across multiple sessions.
 
 DDOS Protection
 - The server should have added security mechanisms such as DDOS protection through connection and rate limits on requests.
