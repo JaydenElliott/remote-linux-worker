@@ -324,7 +324,7 @@ mTLS
 
 TLS Configuration
 - The server and client will use TLS 1.3 to establish a secure connection.  
-- The server will require the use of 2048-bit PKCS#8 RSA keys.
+- The server will require the use of 4096-bit PKCS#8 RSA keys.
 - The server will enable the following ciphers suites:
   - TLS_AES_128_GCM_SHA256,
   - TLS_AES_256_GCM_SHA384,
