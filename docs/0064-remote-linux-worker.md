@@ -28,7 +28,7 @@ The library is responsible for providing a gRPC server that processes requests t
 
 #### Interface
 
-The library exports a struct, `Server` which exposes two public functions:
+The library exports a struct `Server` which exposes two public functions:
 
 A constructor with the signature:
 ```rust
@@ -41,7 +41,8 @@ and a function to run the server:
 pub async fn run(&self) -> Result<(), ServerError>>
 ```
 
-When called, a gRPC server will be initialized with the parsed configuration settings and begin handling incoming requests. The user of this library will be required to implement an async runtime for their `main()` function, for this `tokio` is recommended:
+When called, a gRPC server will be initialized with the parsed configuration settings and begin handling incoming requests. The user of this library will be required to implement an async runtime for their `main()` function; for this `tokio` is recommended. Example usage:
+
 ```rust
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -282,7 +283,7 @@ SUBCOMMANDS:
 
 ```
 
-To view the arguments required for that subcommand, run
+To view the arguments required for that subcommand, run:
 ```
 $ rlw-client {subcommand} --help
 ```
@@ -320,19 +321,14 @@ $ rlw-client list
 
 #### Transport Encryption
 - The gRPC API uses mTLS to authenticate the connection between the server and client.
-- The server and client will use TLS 1.3 to establish a secure connection (see [Library Trade-offs](#library-1)).
-- The server will enable the following ciphers suites. These ciphers are defined as 'secure' by the IETF and are the only ciphers suites allowed in TLS 1.3 that enable Perfect Forward Secrecy.
+- The server and client will use TLS 1.3 to establish a secure connection (see [Security Trade-offs](#security-1)).
+- The server will enable the following ciphers suites. 
   - TLS_AES_128_GCM_SHA256,
   - TLS_AES_256_GCM_SHA384,
   - TLS_CHACHA20_POLY1305_SHA256
+- From the list of available TLS 1.3 cipher suites these are the most secure as they implement Perfect Forward Secrecy. 
+- Also, it is a requirement in the IETF TLS 1.3 Standard that to be to be TLS-compliant you must implement the above cipher suites (see [TLS 1.3 Standard Sec 9.1](https://datatracker.ietf.org/doc/html/rfc8446#section-9.1)). 
 
-#### mTLS Implementation
-
-todo!
-
-- Client initiates request
-- Server verifies identity of the client's certificate and sends it's certificate
-- Client verifies server certificate against root certificate
 
 #### Authorization Scheme
 
