@@ -28,7 +28,7 @@ The library is responsible for providing a gRPC server that processes requests t
 
 #### Interface
 
-The library exports a struct, `Server`. This struct exposes two public functions:
+The library exports a struct, `Server` which exposes two public functions:
 
 A constructor with the signature:
 ```rust
@@ -66,9 +66,9 @@ pub struct ServerSettings {
 }
 ```
 
-With the following constructor signature:
+With the following constructor:
 
-```
+```rust
 pub fn new(socket_address: String) -> Self 
 ```
 
@@ -141,7 +141,7 @@ message StartResponse {
 
 #### Stop
 
-Stopping a job requires the uuid gathered in the StartResponse. The user has the option to gracefully kill the process, allowing the program to process to handle the request.
+Stopping a job requires the UUID gathered in the StartResponse. The user has the option to kill the process gracefully. This will give the process time to internally handle the kill request.
 
 ```proto
 // StopRequest describes StopRequest
@@ -157,7 +157,7 @@ message StopRequest {
 
 It should be noted that when using SIGTERM (graceful = true), the process has the option to ignore the signal, thus if your process is persistently not stopping it is recommended to set graceful to false. 
 
-StopRequest returns the `google.protobuf.Empty` type. The client can asynchronously check the exit status of the process using the [StatusRequest](#status). The reason for this design is that in the event a process takes takes awhile or refuses to shutdown, the client should be non-blocked and able to make other requests. 
+StopRequest returns the `google.protobuf.Empty` type. The client can then asynchronously check the exit status of the process using the [StatusRequest](#status). The reason for this design is that in the event a process takes takes awhile or refuses to shutdown, the client should be non-blocked and able to make other requests. 
 
 #### Stream
 
@@ -256,7 +256,8 @@ message ListJobsResponse {
 ### Security
 
 #### Transport Encryption
-- The server and client will use TLS 1.3 to establish a secure connection.
+- The gRPC API uses mTLS to authenticate the connection between the server and client.
+- The server and client will use TLS 1.3 to establish a secure connection (see [Library Trade-offs](#library-1)).
 - The server will enable the following ciphers suites. These ciphers are defined as 'secure' by the IETF and are the only ciphers suites allowed in TLS 1.3 that enable Perfect Forward Secrecy.
   - TLS_AES_128_GCM_SHA256,
   - TLS_AES_256_GCM_SHA384,
@@ -266,6 +267,10 @@ message ListJobsResponse {
 
 todo!
 
+- Client initiates request
+- Server verifies identity of the client's certificate and sends it's certificate
+- Client verifies server certificate against root certificate
+
 #### Authorization Scheme
 
 When the server receives a request, it will do the following:
@@ -274,7 +279,7 @@ When the server receives a request, it will do the following:
 3. Check the name against a list of authorized users stored in server memory. 
 4. If they exist then continue. If they do not exist, return an unauthorized error.
 
-Clients will also only be authorized to stop, query, list and stream their jobs only.
+Clients will also only be authorized to stop, query, list and stream jobs they themselves have started.
 
 ### Trade-offs and Future Considerations
 
@@ -283,13 +288,7 @@ Clients will also only be authorized to stop, query, list and stream their jobs 
 - All the user data (job information, who is a valid user), should be stored in a database.
   - This will allow for persistent sessions.
   - This will increase the security of sensitive information.
-- The server should have the option to manually configure the TLS settings.
-  - A user may want to use TLS 1.2 due to compatibility with their custom client implementation.
-  - A user may want to use different private key encryption standards.
-- The server should have added security mechanisms such as DDOS protection through connection and rate limits on requests.
-- The server should have the option to pipe logs to file and configure logs.
   
-
 #### Security
 
 ECDSA keys would be preferred over RSA Keys.
@@ -305,25 +304,30 @@ Certificates
   - Obtaining certificates from a reliable CA would be required in production.
   - Public key pinning.
     - Reduces attack surface significantly but requires a significant amount of time and expertise to configure correctly.
+    - If not done correctly this could lead to considerable server down time.
+    - Is only viable if you have a very large user space and you are concerned about being attacked by a fraudulent certificate.
 
+TLS Configuration
+- TLS 1.3 is used over TLS.2 due to decreased latency and increased security.
+- A trade off is that custom client implementations may not support TLS 1.3.
+- Allowing configurable TLS versions would solve this, however the decreased security does need to be taken into consideration.  
 
-The current authorization scheme is limited in usefulness and provides significant security risks.
-- Using an embedded name to verify a client is extremely sensitive to breaches. A simple brute force algorithm would be effective in bypassing this.
-
-The following would help increase authorization security. 
-- Using a username/password login, OAUTH, JWTs or 2 factor auth.
+Authorization
+Using an embedded name to verify a client is sensitive to breaches.The following would help increase authorization security. 
+- Using a username/password login, OAUTH, JWTs or 2 factor authentication.
 - Pairing above with a database would also allow client sessions to be persistent across multiple sessions.
+
+
+DDOS Protection
+- The server should have added security mechanisms such as DDOS protection through connection and rate limits on requests.
 
 #### External Dependency - Tonic
 
 Pros:
 - Highly performant, flexible and well maintained library.
-- Seamless integration with the TLS library `rustls`.  
-- Time saved with client/server setup and integration with the generated gRPC code.
+- Time saved with the client/server setup and integration with the generated gRPC code.
 
 Cons: 
-- `tonic`  v0.7.0 removed the ability to configure the TLS version and cipher suites using `rustls`. Because `tonic` will not allow you to do this manually, the only options are convoluted workarounds, which are messy and not intended to be used. Because of this, an older version of `tonic` will be required.
+- `tonic`  v0.7.0 removed the ability to configure the TLS version and cipher suites using `rustls`. Because `tonic` will not allow you to do this manually, the only options are non-elegant, error-prone workarounds. Because of this, an older version of `tonic` will be used.
   - This is not a viable option for production.
   - For a larger project with more time, setting up the server from scratch would be a better option in order to solve this issue and provide more configurability.
-
-
