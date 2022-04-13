@@ -28,22 +28,30 @@ The library is responsible for providing a gRPC server that processes requests t
 
 #### Interface
 
-This library exports a single function with the signature:
+The library exports a struct, `Server`. This struct exposes two public functions:
+
+A constructor with the signature:
+```rust
+pub fn new(config: ServerSettings) -> Self
+```
+
+and a function to run the server:
 
 ```rust
-pub async fn start_server(config: ServerSettings) -> Result<(), ServerError>>
+pub async fn run(&self) -> Result<(), ServerError>>
 ```
 
 When called, a gRPC server will be initialized with the parsed configuration settings and begin handling incoming requests. The user of this library will be required to implement an async runtime for their `main()` function, for this `tokio` is recommended:
 ```rust
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-  ...
-  start_server(config).await?;
+  let settings = ServerSettings::new("[::1]:50051");
+  let server = Server::new(settings);
+  server.run().await?;
 }
 ```
 
-The library also provides a server configuration object to be parsed to `start_server()`:
+The library also exposes the struct `ServerSettings`:
 ```rust
 pub struct ServerSettings {
     // TODO: Add extra configuration options:
@@ -56,6 +64,12 @@ pub struct ServerSettings {
     // A String containing the IPv6 address + port the user wishes to run the server on
     pub socket_address: String,
 }
+```
+
+With the following constructor signature:
+
+```
+pub fn new(socket_address: String) -> Self 
 ```
 
 
@@ -236,7 +250,7 @@ message ListJobsResponse {
 
 
 ### CLI
-
+- rlw 
 
 
 ### Security
