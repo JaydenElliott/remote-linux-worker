@@ -90,16 +90,16 @@ The gRPC API exposes a single service `JobProcessorService`:
 // JobProcessorService describes an API interface to perform start, stop, stream 
 // and status query requests for Linux process jobs.
 service JobProcessorService {
-  // Start starts a new linux process job
+  // Start starts a new process job
   rpc Start(StartRequest) returns(StartResponse);
 
-  // Stop stops a currently running linux process job 
+  // Stop stops a running process job 
   rpc Stop(StopRequest) returns(google.protobuf.Empty);
 
   // Stream streams all previous and upcoming stderr and stdout data for a specified job
   rpc Stream(StreamRequest) returns(stream StreamResponse);
 
-  // Status returns the status of a previous linux process job
+  // Status returns the status of a previous process job
   rpc Status(StatusRequest) returns(StatusResponse);
 
   // ListJobs returns a list of all current and previous process job uuids
@@ -250,7 +250,70 @@ message ListJobsResponse {
 
 
 ### CLI
-- rlw 
+
+The client command line interface will allow users to access the API.
+
+Each command consists of two components:
+1. Subcommand (Start, Stop, etc...).
+2. Arguments corresponding to that subcommand.
+
+To view all subcommands, run:
+
+```
+$ rlw-client --help
+
+USAGE:
+    rlw-client [OPTIONS] <SUBCOMMAND>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -s, --address <address>     [default: http://[::1]:50051]
+
+SUBCOMMANDS:
+    help      Prints this message or the help of the given subcommand(s)
+    list      Return a list of all current and previous process job uuids
+    start     Start a new process job
+    status    Return the status of a previous process job
+    stop      Stop a running process
+    stream    Stream all previous and upcoming stderr and stdout data for a specified job
+
+```
+
+To view the arguments required for that subcommand, run
+```
+$ rlw-client {subcommand} --help
+```
+
+#### Example usage
+
+Start
+```
+$ rlw-client start -c ls -- -a -l
+```
+
+Stop
+```
+$ rlw-client stop -f -u 0bcb5f36-b2d3-493e-9d76-f650ba225c5d
+```
+
+Stream
+```
+$ rlw-client stream -u 0bcb5f36-b2d3-493e-9d76-f650ba225c5d
+```
+
+Status
+```
+$ rlw-client status -u 0bcb5f36-b2d3-493e-9d76-f650ba225c5d
+```
+
+List
+```
+$ rlw-client list
+```
+
 
 
 ### Security
