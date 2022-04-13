@@ -12,9 +12,9 @@ A lightweight remote linux process execution server-side library and client CLI.
 
 ## Why
 
-Customers have expressed interest in a solution to expose their servers to their clients in a controlled and secure way.
+Customers have expressed interest in a product that allows their clients to run commands on a server in a controlled and secure way.
 
-I propose a library and client CLI solution that will achieve this goal through a gRPC API with the ability to configure connection security and access control.
+Outlined below is a proposed library and client CLI solution that will achieve this goal through a gRPC API with strong connection security and the ability to manage access control.
 
 
 ## Details
@@ -24,11 +24,11 @@ I propose a library and client CLI solution that will achieve this goal through 
 #### High level details
 
 
-The library is responsible for providing a gRPC server that processes requests to `start`, `stop`, `query` and `stream` the output of linux process jobs. Refer to [API](#api) for an overview of the exposed API features.
+The library is responsible for providing a gRPC server that processes requests to `start`, `stop`, `query` and `stream` the output of Linux process jobs. Refer to [API](#api) for an overview of the exposed API features.
 
 #### Interface
 
-The library exports a struct `Server` which exposes two public functions:
+The library exports a struct `Server` that exposes two functions:
 
 A constructor with the signature:
 ```rust
@@ -51,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-The library also exposes the struct `ServerSettings`:
+The library also exports the struct `ServerSettings`:
 ```rust
 pub struct ServerSettings {
     // TODO: Add extra configuration options:
@@ -85,7 +85,7 @@ Note: `tonic` and `rustls` will not use their latest version, see [Trade-Offs To
 
 ### API
 
-The gRPC API exposes a single service `JobProcessorService`: 
+The gRPC API will expose a single service `JobProcessorService`: 
 ```proto
 // JobProcessorService describes an API interface to perform start, stop, stream 
 // and status query requests for Linux process jobs.
@@ -109,7 +109,7 @@ service JobProcessorService {
 ```
 
 #### Start
-Start will begin a new job using the command and arguments specified.
+Start will begin a new job using the command and arguments specified:
 ```proto
 // StartRequest describes StartRequest
 message StartRequest {
@@ -121,7 +121,7 @@ message StartRequest {
 }
 ```
 
-An example client message in Rust would look something like:
+An example client message in Rust:
 ```rust
 let request = Request::new(StartRequest{
   command: "cargo",
@@ -129,7 +129,7 @@ let request = Request::new(StartRequest{
 })
 ```
 
-The response is a UUID generated for that job.
+The response is a UUID generated for that job:
 
 ```proto
 // StartResponse describes StartResponse
@@ -149,7 +149,7 @@ message StopRequest {
   // uuid is the unique identifier of the job process to stop
   string uuid = 1;
 
-  // graceful defines if a job should be killed using using SIGTERM (true) or SIGKILL (false). 
+  // graceful defines if a job should be killed using using SIGTERM (true) or SIGKILL (false) 
   // SIGTERM will be used by default
   bool graceful = 2;
 }
@@ -157,7 +157,7 @@ message StopRequest {
 
 It should be noted that when using SIGTERM (graceful = true), the process has the option to ignore the signal, thus if your process is persistently not stopping it is recommended to set graceful to false. 
 
-StopRequest returns the `google.protobuf.Empty` type. The client can then asynchronously check the exit status of the process using the [StatusRequest](#status). The reason for this design is that in the event a process takes takes awhile or refuses to shutdown, the client should be non-blocked and able to make other requests. 
+StopRequest returns the `google.protobuf.Empty` type. The client can then asynchronously check the exit status of the process using the [StatusRequest](#status). The reason for this design is that in the event a process takes a while or refuses to shutdown, the client should not be blocked and should be able to make other requests. 
 
 #### Stream
 
@@ -183,7 +183,7 @@ message StreamResponse {
 
 #### Status
 
-Querying the status of a job requires the uuid gathered in the StartResponse:
+Querying the status of a job requires the UUID gathered in the StartResponse:
 
 ```proto
 // StatusRequest describes StatusRequest
@@ -230,7 +230,7 @@ let stdout_reader = BufReader::new(response.stdout_output.as_slice());
 
 ### ListJobs
 
-A `ListRequest` will return the client's job history and currently running jobs. 
+A `ListRequest` will return the client's job history and jobs currently running. 
 
 No input is required to make this request.
 
@@ -242,7 +242,7 @@ message ListJobsResponse {
   repeated string current = 1;
 
   // previous defines a list of uuids representing the previous
-  // job processes that have finished or shutdown.
+  // job processes that have finished or shutdown
   repeated string previous = 2;
 }
 
@@ -254,7 +254,7 @@ message ListJobsResponse {
 The client command line interface will allow users to access the API.
 
 Each command consists of two components:
-1. Subcommand (Start, Stop, etc...).
+1. Subcommand (Start, Stop, etc.).
 2. Arguments corresponding to that subcommand.
 
 To view all subcommands, run:
@@ -318,25 +318,24 @@ $ rlw-client list
 
 #### Transport Encryption
 
-See [Security Trade-offs](#security-1) for tradeoffs regarding these points.
-
-
 mTLS
 - The gRPC API uses mTLS to authenticate the connection between the server and client.
   - A certificate chain of size two will be used.
   - Each client and the sever will be provided a certificate signed by a custom self-signed 'root' certificate.
-  - During the handshake, the client will authenticate the servers certificate against the root.
+  - During the handshake, the client will authenticate the server's certificate against the root.
   - The server will then authenticate the client's certificate.
 
 TLS Configuration
 - The server and client will use TLS 1.3 to establish a secure connection.  
 - The server will require the use of 2048-bit PKCS#8 RSA keys.
-- The server will enable the following ciphers suites. 
+- The server will enable the following ciphers suites:
   - TLS_AES_128_GCM_SHA256,
   - TLS_AES_256_GCM_SHA384,
   - TLS_CHACHA20_POLY1305_SHA256
 - From the list of available TLS 1.3 cipher suites these are the most secure as they implement Perfect Forward Secrecy. 
 - Also, it is a requirement in the IETF TLS 1.3 Standard that to be to be TLS-compliant you must implement the above cipher suites (see [TLS 1.3 Standard Sec 9.1](https://datatracker.ietf.org/doc/html/rfc8446#section-9.1)). 
+
+See [Security Trade-offs](#security-1) for tradeoffs regarding these points.
 
 #### Authorization Scheme
 
@@ -358,13 +357,13 @@ Clients will also only be authorized to stop, query, list and stream jobs they t
   
 - The server should provide an option to execute the client's commands in a virtual runtime environment. This would be useful for the following reasons:
     - A library user may not want the client executing commands within their server.
-    - This decrease the damage done by the execution of malicious binaries / commands.
+    - This decreases the damage done by the execution of malicious binaries / commands.
   - Giving the client access to a specific subset of the filesystem using access-control-lists could provide similar functionality.
 
 
 #### Security
 
-ECDSA keys would be preferred over RSA Keys.
+ECDSA keys would be preferred over RSA Keys because:
   - ECDSA keys are more secure and performant, however `rustls` does not currently support parsing these keys.
   - A benefit of RSA keys are that they are more compatible with most systems due to it being the de facto standard.
 
@@ -374,27 +373,24 @@ Other changes to the private-key implementation that would increase security are
 
 Certificates
 - Self-signing certificates are not secure. The following would help increase security:
-  - Obtaining certificates from a reliable CA would be required in production.
-  - Public key pinning.
+  - Obtaining certificates from a reliable CA.
+  - Implementing public key pinning:
     - Reduces attack surface significantly but requires a significant amount of time and expertise to configure correctly.
     - If not done correctly this could lead to considerable server down time.
-    - Is only viable if you have a very large user space and you are concerned about being attacked by a fraudulent certificate.
 - The application's security would benefit from building a stronger chain of trust using a larger number of intermediary CAs.
 
 TLS Configuration
 - TLS 1.3 is used over TLS.2 due to decreased latency and increased security.
 - A trade off is that custom client implementations may not support TLS 1.3.
-- Allowing configurable TLS versions would solve this, however the decreased security does need to be taken into consideration.  
+  - Allowing configurable TLS versions would solve this, however the decreased security does need to be taken into consideration.  
 
 Authorization
-Using an embedded name to verify a client is sensitive to breaches.The following would help increase authorization security. 
-- Using a username/password login, OAUTH, JWTs or 2 factor authentication.
-- Pairing above with a database would also allow client sessions to be persistent across multiple sessions.
-
+Using an embedded name to verify a client is sensitive to breaches. The following would help increase authorization security: 
+- Using a username/password login, OAUTH, JWTs or 2FA.
+- Pairing the above with a database would also allow client sessions to be persistent across multiple sessions.
 
 DDOS Protection
 - The server should have added security mechanisms such as DDOS protection through connection and rate limits on requests.
-
 
 
 #### External Dependency - Tonic
