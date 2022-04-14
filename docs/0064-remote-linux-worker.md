@@ -382,7 +382,6 @@ Changes to the private-key implementation that would increase security are:
 
 Certificates
 - Self-signing certificates are not secure. The following would help increase security:
-  - Obtaining certificates from a reliable CA.
   - Implementing public key pinning:
     - Reduces attack surface significantly but requires a significant amount of time and expertise to configure correctly.
     - If not done correctly this could lead to considerable server down time.
