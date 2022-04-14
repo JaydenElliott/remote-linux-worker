@@ -72,6 +72,50 @@ pub fn new(socket_address: String) -> Self
 
 #### General Data Structure Overview
 
+The server will hold a hashmap that maps usernames to `User` structs. When a user makes a request to `stop`, `status` or `stream`, the server will access this structure to see if the user exists and if the requested job is available to them.
+
+```rust
+/// Stores usernames and associated User objects
+struct UserTable {
+    // Maps a username to a user object
+    users: HashMap<String, User>,
+}
+```
+
+Each user struct will contain a list of jobs and a job queue. The list of jobs is used to store all the information regarding the job (i.e. is it still running, the stderr and stdout, exit code etc.)
+
+The job queue contains the jobs that a client has requested be started. The main thread will be adding to this queue as the client sends more requests, meanwhile, a new thread will be processing the queue.
+
+```rust
+/// Stores a single user's job information.
+struct User {
+    // A list of the user's jobs.
+    jobs: Vec<Jobs>,
+
+    // A queue storing new job requests.
+    job_queue: Mutex<VecDeque<StartRequest>>,
+}
+```
+
+``` rust
+/// Represents a user process job
+struct Jobs {
+    // Defines if the the process is still running.
+    running: bool,
+
+    // The exit code of a finished process.
+    exit_code: u32,
+
+    // Represents a signal code if a job was terminated via a signal
+    signal: u32,
+
+    // stderr and stdout output from the job.
+    output: Vec<u8>,
+}
+```
+
+
+
 
 
 #### External Dependencies
