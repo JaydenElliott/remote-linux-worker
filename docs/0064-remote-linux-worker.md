@@ -21,7 +21,7 @@ Customers have expressed interest in a product that allows their clients to run 
 #### High Level Details
 
 
-The library is responsible for providing a gRPC server that processes requests to `start`, `stop`, `list`, `query`, and `stream` the output of Linux process jobs. Refer to [API](#api) for an overview of the exposed API features.
+The library is responsible for providing a gRPC server that processes requests to `start`, `stop`, query the `status`, and `stream` the output of Linux process jobs. Refer to [API](#api) for an overview of the exposed API features.
 
 #### Interface
 
@@ -85,7 +85,7 @@ Note: `tonic` and `rustls` will not use their latest version, see [Trade-Offs To
 The gRPC API will expose a single service `JobProcessorService`: 
 ```proto
 // JobProcessorService describes an API interface to perform start, stop, stream, 
-// list and status requests for Linux process jobs.
+// and status requests for Linux process jobs.
 service JobProcessorService {
   // Start starts a new process job
   rpc Start(StartRequest) returns(StartResponse);
@@ -98,9 +98,6 @@ service JobProcessorService {
 
   // Status returns the status of a previous process job
   rpc Status(StatusRequest) returns(StatusResponse);
-
-  // ListJobs returns a list of all current and previous process job uuids
-  rpc ListJobs(google.protobuf.Empty) returns(ListJobsResponse);
 }
 
 ```
@@ -225,24 +222,6 @@ let stdout_reader = BufReader::new(response.stdout_output.as_slice());
 
 ```
 
-### ListJobs
-
-A `ListRequest` will return the client's job history and jobs currently running. 
-
-No input is required to make this request.
-
-```proto
-// ListJobsResponse describes ListJobsResponse
-message ListJobsResponse {
-  // current defines a list of uuids representing the current 
-  // job processes running
-  repeated string current = 1;
-
-  // previous defines a list of uuids representing the previous
-  // job processes that have finished or shutdown
-  repeated string previous = 2;
-}
-
 ```
 
 
@@ -271,7 +250,6 @@ OPTIONS:
 
 SUBCOMMANDS:
     help      Prints this message or the help of the given subcommand(s)
-    list      Return a list of all current and previous process job uuids
     start     Start a new process job
     status    Return the status of a previous process job
     stop      Stop a running process
@@ -288,27 +266,22 @@ $ rlw-client {subcommand} --help
 
 Start
 ```
-$ rlw-client start -c ls -- -a -l
+$ rlw-client start ls -a -l
 ```
 
 Stop
 ```
-$ rlw-client stop -u 0bcb5f36-b2d3-493e-9d76-f650ba225c5d -f
+$ rlw-client stop -f 0bcb5f36-b2d3-493e-9d76-f650ba225c5d 
 ```
 
 Stream
 ```
-$ rlw-client stream -u 0bcb5f36-b2d3-493e-9d76-f650ba225c5d
+$ rlw-client stream 0bcb5f36-b2d3-493e-9d76-f650ba225c5d
 ```
 
 Status
 ```
-$ rlw-client status -u 0bcb5f36-b2d3-493e-9d76-f650ba225c5d
-```
-
-List
-```
-$ rlw-client list
+$ rlw-client status 0bcb5f36-b2d3-493e-9d76-f650ba225c5d
 ```
 
 ### Security
@@ -342,7 +315,7 @@ When the server receives a request, it will do the following:
 3. Check the name against a list of authorized users stored in server memory. 
 4. If they exist then continue. If they do not exist, return an unauthorized error.
 
-Clients will only be authorized to stop, query, list and stream jobs they themselves have started.
+Clients will only be authorized to stop, query, and stream jobs they themselves have started.
 
 ### Trade-offs and Future Considerations
 
