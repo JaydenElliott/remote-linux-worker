@@ -294,8 +294,8 @@ $ rlw-client status 0bcb5f36-b2d3-493e-9d76-f650ba225c5d
 
 mTLS
 - The gRPC API uses mTLS to authenticate the connection between the server and client.
-  - A certificate chain of size two will be used.
-  - Each client and the sever will be provided a certificate signed by a custom self-signed 'root' certificate.
+  - A certificate chain of size two will be used (root and server/client certificate). No intermediary certificates will be used.
+  - Each client and the server will be provided a certificate signed by a custom self-signed 'root' certificate.
   - During the handshake, the client will authenticate the server's certificate against the root.
   - The server will then authenticate the client's certificate.
 
