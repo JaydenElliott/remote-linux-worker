@@ -215,11 +215,8 @@ message StartResponse {
 
 // StreamResponse describes StreamResponse
 message StreamResponse {
-  // stdout_output defines the stdout content being streamed to the client
-  bytes stdout_output = 1;
-    
-  // stderr_output defines the stderr content being streamed to the client
-  bytes stderr_output = 2;
+  // output defines the stdout and stderr content being streamed to the client
+  bytes output = 1;
 }
 ```
 
@@ -253,12 +250,6 @@ message StatusResponse {
   // In the event of a `stop` request this will either be 9 (SIGKILL) or 
   // 15 (SIGTERM).
   uint32 signal = 3;
-
-  // stderr_output is the standard error output of the job
-  bytes stderr_output = 4;
-
-  // stdout_output is the standard output of the job
-  bytes stdout_output = 5;
 }
 }
 
@@ -300,7 +291,8 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -s, --address <address>     [default: http://[::1]:50051]
+    -s, --address <address>                                     [default: http://[::1]:50051]
+    -c, --client-cert-path <client-cert-path>    
 
 SUBCOMMANDS:
     help      Prints this message or the help of the given subcommand(s)
@@ -308,6 +300,7 @@ SUBCOMMANDS:
     status    Return the status of a previous process job
     stop      Stop a running process
     stream    Stream all previous and upcoming stderr and stdout data for a specified job
+
 
 ```
 
