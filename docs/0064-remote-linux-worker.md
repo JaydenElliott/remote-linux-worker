@@ -292,7 +292,8 @@ FLAGS:
 
 OPTIONS:
     -s, --address <address>                                     [default: http://[::1]:50051]
-    -c, --client-cert-path <client-cert-path>    
+    -c, --cert <cert>    
+    -p, --private-key <private-key>    
 
 SUBCOMMANDS:
     help      Prints this message or the help of the given subcommand(s)
@@ -313,22 +314,22 @@ $ rlw-client {subcommand} --help
 
 Start
 ```
-$ rlw-client start ls -a -l
+$ rlw-client -c $CERT -p $KEY start ls -a -l
 ```
 
 Stop
 ```
-$ rlw-client stop -f 0bcb5f36-b2d3-493e-9d76-f650ba225c5d 
+$ rlw-client -c $CERT -p $KEY stop -f 0bcb5f36-b2d3-493e-9d76-f650ba225c5d 
 ```
 
 Stream
 ```
-$ rlw-client stream 0bcb5f36-b2d3-493e-9d76-f650ba225c5d
+$ rlw-client -c $CERT -p $KEY stream 0bcb5f36-b2d3-493e-9d76-f650ba225c5d
 ```
 
 Status
 ```
-$ rlw-client status 0bcb5f36-b2d3-493e-9d76-f650ba225c5d
+$ rlw-client -c $CERT -p $KEY status 0bcb5f36-b2d3-493e-9d76-f650ba225c5d
 ```
 
 ### Security
