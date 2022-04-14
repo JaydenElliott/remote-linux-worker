@@ -70,6 +70,9 @@ With the following constructor:
 pub fn new(socket_address: String) -> Self 
 ```
 
+#### General Data Structure Overview
+
+
 
 #### External Dependencies
 The following basic dependencies will be required:
@@ -301,7 +304,6 @@ mTLS
 
 TLS Configuration
 - The server and client will use TLS 1.3 to establish a secure connection.  
-- The server will require the use of 4096-bit PKCS#8 RSA keys.
 - The server will enable the following ciphers suites:
   - TLS_AES_128_GCM_SHA256,
   - TLS_AES_256_GCM_SHA384,
@@ -350,7 +352,7 @@ Certificates
 - The application's security would benefit from building a stronger chain of trust using a larger number of intermediary CAs.
 
 TLS Configuration
-- TLS 1.3 is used over TLS.2 due to decreased latency and increased security.
+- TLS 1.3 is used over TLS 1.2 due to decreased latency and increased security.
 - A trade off is that custom client implementations may not support TLS 1.3.
   - Allowing configurable TLS versions would solve this, however the cost of decreased security does need to be taken into consideration.  
 - The server should have the option to configure host and user CAs.
