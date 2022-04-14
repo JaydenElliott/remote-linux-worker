@@ -312,14 +312,10 @@ TLS Configuration
 See [Security Trade-offs](#security-1) for trade-offs regarding these points.
 
 #### Authorization Scheme
-
-When the server receives a request, it will do the following:
+Client's will only be able to access jobs that they themselves started. To enforce this, when the server receives a request to `stop`, `status` or `stream` a job, it will do the following:
 1. Verify the client's certificate.
 2. Parse the client's name from the certificate.
-3. Check the name against a list of authorized users stored in server memory. 
-4. If they exist then continue. If they do not exist, return an unauthorized error.
-
-Clients will only be authorized to stop, query, and stream jobs they themselves have started.
+3. Check the parsed name corresponds to the same name that started the job originally.
 
 ### Trade-offs and Future Considerations
 
