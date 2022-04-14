@@ -244,12 +244,13 @@ message StatusResponse {
 
     // exit_code represents the exit_code of the job if the underlying process has finished
     uint32 exit_code = 2; 
+
+    // signal represents the signal code that terminated a process.
+    // In the event of a `stop` request this will either be 9 (SIGKILL) or 
+    // 15 (SIGTERM).
+    uint32 signal = 3;
   }
 
-  // signal represents the signal code that terminated a process.
-  // In the event of a `stop` request this will either be 9 (SIGKILL) or 
-  // 15 (SIGTERM).
-  uint32 signal = 3;
 }
 }
 
