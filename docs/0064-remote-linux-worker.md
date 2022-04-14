@@ -57,6 +57,7 @@ pub struct ServerSettings {
     // - Option to manually configure TLS:
     //    - to use TLS v1.2 for an old client implementation
     //    - to allow different private key encryption formats
+    // - Option to set the host and user CA
 
     // A String containing the IPv6 address + port the user wishes to run the server on
     pub socket_address: String,
@@ -222,9 +223,6 @@ let stdout_reader = BufReader::new(response.stdout_output.as_slice());
 
 ```
 
-```
-
-
 ### CLI
 
 The client command line interface will allow users to access the API.
@@ -353,6 +351,7 @@ TLS Configuration
 - TLS 1.3 is used over TLS.2 due to decreased latency and increased security.
 - A trade off is that custom client implementations may not support TLS 1.3.
   - Allowing configurable TLS versions would solve this, however the cost of decreased security does need to be taken into consideration.  
+- The server should have the option to configure host and user CAs.
 
 Authorization
 - Embedding a name within a certificate to verify a client is sensitive to brute force breaches. The following would help increase authorization security: 
