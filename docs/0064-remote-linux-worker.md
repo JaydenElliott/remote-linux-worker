@@ -196,11 +196,14 @@ The response contains useful process metadata:
 ```proto
 // StatusResponse describes StatusResponse
 message StatusResponse {
-  // running defines if a job is currently running
-  bool running = 1;
 
-  // exit_code represents the exit_code of the job if the underlying process has finished
-  uint32 exit_code = 2; 
+  oneof process_status {
+    // running defines if a job is currently running
+    bool running = 1;
+
+    // exit_code represents the exit_code of the job if the underlying process has finished
+    uint32 exit_code = 2; 
+  }
 
   // signal represents the signal code that terminated a process.
   // In the event of a `stop` request this will either be 9 (SIGKILL) or 
