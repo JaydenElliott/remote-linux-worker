@@ -335,11 +335,7 @@ Client's will only be able to access jobs that they themselves started. To enfor
 
 #### Security
 
-ECDSA keys would be preferred over RSA Keys because:
-  - ECDSA keys are more secure and performant, however `rustls` does not currently support parsing these keys.
-  - A benefit of RSA keys are that they are more compatible with most systems due to it being the de facto standard.
-
-Other changes to the private-key implementation that would increase security are:
+Changes to the private-key implementation that would increase security are:
 - Storage of keys in a cloud based service such as 'GCP's Secret Manager' would decrease the risk of leaked private keys.
 - Renewing keys and certificates periodically (e.g. yearly).
 
@@ -349,7 +345,6 @@ Certificates
   - Implementing public key pinning:
     - Reduces attack surface significantly but requires a significant amount of time and expertise to configure correctly.
     - If not done correctly this could lead to considerable server down time.
-- The application's security would benefit from building a stronger chain of trust using a larger number of intermediary CAs.
 
 TLS Configuration
 - TLS 1.3 is used over TLS 1.2 due to decreased latency and increased security.
@@ -357,8 +352,7 @@ TLS Configuration
   - Allowing configurable TLS versions would solve this, however the cost of decreased security does need to be taken into consideration.  
 - The server should have the option to configure host and user CAs.
 
-Authorization
-- Embedding a name within a certificate to verify a client is sensitive to brute force breaches. The following would help increase authorization security: 
+Authorization could be further secured by:
   - Using a username/password login, OAUTH, JWTs or 2FA.
   - Pairing the above with a database would allow client sessions to be persistent across multiple sessions.
 
