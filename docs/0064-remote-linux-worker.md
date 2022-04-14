@@ -37,7 +37,7 @@ and a function to run the server:
 ```rust
 pub async fn run(&self) -> Result<(), ServerError>>
 ```
-When called, a gRPC server will be initialized with the parsed configuration settings and begin handling incoming requests. The user of this library will be required to implement an async runtime; for this `tokio` is recommended. Example usage:
+When called, a gRPC server will be initialized with the parsed configuration settings and begin handling incoming requests. The user of this library will be required to implement a `tokio` async runtime to run the server. Example usage:
 
 ```rust
 #[tokio::main]
@@ -135,7 +135,7 @@ message StartResponse {
 
 #### Stop
 
-Stopping a job requires the UUID returned in the StartResponse. The user has the option to kill the process gracefully. This will give the process time to internally handle the kill request.
+Stopping a job requires the UUID returned in the StartResponse. The user has the option to force kill the process with SIGKILL by setting `forced` to true. By not providing `forced` or setting it to false the process will be killed using SIGTERM.
 
 ```proto
 // StopRequest describes StopRequest
@@ -143,9 +143,9 @@ message StopRequest {
   // uuid is the unique identifier of the job process to stop
   string uuid = 1;
 
-  // graceful defines if a job should be killed using using SIGTERM (true) or SIGKILL (false) 
+  // forced defines if a job should be killed using using SIGKILL (true) or SIGTERM (false)
   // SIGTERM will be used by default
-  bool graceful = 2;
+  bool forced = 2;
 }
 ```
 
