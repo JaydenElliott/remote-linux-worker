@@ -70,7 +70,7 @@ With the following constructor:
 pub fn new(socket_address: String) -> Self 
 ```
 
-#### General Data Structure Overview
+#### General Data Structure and Streaming Logic Overview
 
 The server will hold a hashmap that maps usernames to `User` structs. When a user makes a request to `stop`, `status` or `stream`, the server will access this structure to see if the user exists and if the requested job is available to them.
 
@@ -252,7 +252,6 @@ message StatusResponse {
     uint32 signal = 3;
   }
 
-}
 }
 
 ```
