@@ -82,9 +82,14 @@ struct UserTable {
 }
 ```
 
-Each user struct will contain a list of jobs and a job queue. The list of jobs is used to store all the information regarding the job (i.e. is it still running, the stderr and stdout, exit code etc.)
+Each user struct will contain a list of jobs and a job queue:
+- The list of jobs is used to store all the information regarding the job (i.e. is it still running, the stderr and stdout, exit code etc.)
+- The job queue contains the jobs that a client has requested be started.
 
-The job queue contains the jobs that a client has requested be started. The main thread will be adding to this queue as the client sends more requests, meanwhile, a new thread will be processing the queue.
+The job processing logic will be: 
+- As `start` requests for a particular client come in, the main thread will be adding these jobs to the client's queue.
+- A second thread will be reading from this queue, processing the jobs and sending the output down a channel.
+- A third thread will be on the receiving end of the channel, writing the stderr and stdout to the `output` field of `Jobs`.
 
 ```rust
 /// Stores a single user's job information.
