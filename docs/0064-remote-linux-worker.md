@@ -59,7 +59,7 @@ pub struct ServerSettings {
     //    - to allow different private key encryption formats
     // - Option to set the host and user CA
 
-    // A String containing the IPv6 address + port the user wishes to run the server on
+    /// A String containing the IPv6 address + port the user wishes to run the server on
     pub socket_address: String,
 }
 ```
@@ -77,13 +77,13 @@ The server will hold a hashmap that maps usernames to `User` structs. When a use
 ```rust
 /// Stores usernames and associated User objects
 struct UserTable {
-    // Maps a username to a user object
+    /// Maps a username to a user object
     users: HashMap<String, User>,
 }
 ```
 
-Each user struct will contain a list of jobs and a job queue:
-- The list of jobs is used to store all the information regarding the job (i.e. is it still running, the stderr and stdout, exit code etc.)
+Each user struct will contain a hashmaps of jobs and a job queue:
+- The hashmap of jobs (mapping uuid to job) is used to store all the information regarding the job (i.e. is it still running, the stderr and stdout, exit code etc.)
 - The job queue contains the jobs that a client has requested be started.
 
 The job processing logic will be: 
@@ -94,33 +94,29 @@ The job processing logic will be:
 ```rust
 /// Stores a single user's job information.
 struct User {
-    // A list of the user's jobs.
-    jobs: Vec<Jobs>,
+    /// Maps a job uuid to a Job
+    jobs: HashMap<String, Jobs>,
 
-    // A queue storing new job requests.
+    /// A queue storing new job requests.
     job_queue: Mutex<VecDeque<StartRequest>>,
 }
 ```
 
 ``` rust
-/// Represents a user process job
-struct Jobs {
-    // Defines if the the process is still running.
-    running: bool,
+/// A user job containing information about the
+/// underlying process.
+pub struct Job {
+    /// Job status
+    status: status_response::ProcessStatus,
 
-    // The exit code of a finished process.
-    exit_code: u32,
-
-    // Represents a signal code if a job was terminated via a signal
-    signal: u32,
-
-    // stderr and stdout output from the job.
+    /// Stderr and stdout output from the job.
     output: Vec<u8>,
 }
 ```
 
+Where `status_reponse::ProcessStatus` is the prost generated status enum. 
 
-
+<br>
 
 
 #### External Dependencies
