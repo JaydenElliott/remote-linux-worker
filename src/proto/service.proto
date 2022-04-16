@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package job_processor;
+
+import "google/protobuf/empty.proto";
+
+// JobProcessorService describes an API interface to perform start, stop, stream 
+// and query status requests for Linux process jobs.
+service JobProcessorService {
+  // Start starts a new process job
+  rpc Start(StartRequest) returns(StartResponse);
+
+  // Stop stops a running process job 
+  rpc Stop(StopRequest) returns(google.protobuf.Empty);
+
+  // Stream streams all previous and upcoming stderr and stdout data for a specified job
+  rpc Stream(StreamRequest) returns(stream StreamResponse);
+
+  // Status returns the status of a previous process job
+  rpc Status(StatusRequest) returns(StatusResponse);
+}
+
+// StartRequest describes StartRequest
+message StartRequest {
+  // command is the path to the script or the native linux command to execute
+  string command = 1;
+
+  // arguments specifies the arguments to run with the script/command being executed
+  repeated string arguments = 2;
+}
+
+// StopRequest describes StopRequest
+message StopRequest {
+  // uuid is the unique identifier of the job process to stop
+  string uuid = 1;
+
+  // forced defines if a job should be killed using using SIGKILL (true) or SIGTERM (false)
+  // SIGTERM will be used by default
+  bool forced = 2;
+}
+
+// StreamRequest describes StreamRequest
+message StreamRequest {
+  // uuid is the unique identifier of the job process to stream
+  string uuid = 1;
+}
+
+// StatusRequest describes StatusRequest
+message StatusRequest {
+  // uuid is the unique identifier of the job process to query
+  string uuid = 1;
+}
+
+
+// StartResponse describes StartResponse
+message StartResponse {
+  // uuid is the unique identifier of the job started 
+  string uuid = 1;
+}
+
+// StreamResponse describes StreamResponse
+message StreamResponse {
+  // stdout_output defines the stdout content being streamed to the client
+  bytes stdout_output = 1;
+    
+  // stderr_output defines the stderr content being streamed to the client
+  bytes stderr_output = 2;
+}
+
+// StatusResponse describes StatusResponse
+message StatusResponse {
+
+  oneof process_status {
+    // running defines if a job is currently running
+    bool running = 1;
+
+    // exit_code represents the exit_code of the job if the underlying process has finished
+    int32 exit_code = 2; 
+
+    // signal represents the signal code that terminated a process.
+    // In the event of a Stop request this will either be 9 (SIGKILL) for forced stop
+    // and 15 (SIGTERM) otherwise.
+    int32 signal = 3;
+  }
+
+}
