@@ -58,14 +58,13 @@ impl Job {
             execute_command(command, args, Some(&tx_pid), &tx_output)
         });
 
-        // Scope below required to allow for the lock release
-        {
-            let mut pid = self.pid.lock().await;
-            *pid = Some(rx_pid.recv()?);
+        let mut pid = self.pid.lock().await;
+        *pid = Some(rx_pid.recv()?);
+        mem::drop(pid); // release guard
 
-            let mut status = self.status.lock().await;
-            *status = Some(status_response::ProcessStatus::Running(true));
-        }
+        let mut status = self.status.lock().await;
+        *status = Some(status_response::ProcessStatus::Running(true));
+        mem::drop(status); // release guard
 
         // Populate stdout/stderr output
         for rec in rx_output {
@@ -108,7 +107,6 @@ impl Job {
     ///
     /// * `pid` - the process id of the process to send the kill signal to.
     /// * `forced` - if true, the signal sent will be SIGKILL, and SIGTERM otherwise
-    ///
     pub async fn stop_command(&self, forced: bool) -> Result<(), RLWServerError> {
         let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
 
@@ -206,17 +204,17 @@ mod tests {
             arc2.stream_output().await;
         });
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        let arc3 = Arc::clone(&job_arc);
-        let arc4 = Arc::clone(&job_arc);
-        let pid = arc3.pid.lock().await.expect("no pid");
-        let task3 = tokio::spawn(async move {
-            arc4.stop_command(true).await.expect("bad in here");
-        });
+        // tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        // let arc3 = Arc::clone(&job_arc);
+        // let arc4 = Arc::clone(&job_arc);
+        // let pid = arc3.pid.lock().await.expect("no pid");
+        // let task3 = tokio::spawn(async move {
+        //     arc4.stop_command(true).await.expect("bad in here");
+        // });
 
         let _ = task1.await?;
         let _ = task2.await?;
-        let _ = task3.await?;
+        // let _ = task3.await?;
 
         Ok(())
     }
