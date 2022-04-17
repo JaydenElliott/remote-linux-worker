@@ -35,9 +35,9 @@ pub fn execute_command(
         .spawn()?;
 
     // Send PID
-    // if let Some(t) = tx_pid {
-    //     t.send(output.id())?;
-    // }
+    if let Some(t) = tx_pid {
+        t.send(output.id())?;
+    }
 
     // Setup stream readers
     let stdout_reader = BufReader::new(output.stdout.take().ok_or(RLWServerError(

@@ -2,6 +2,7 @@
 //! rlw server to run.
 
 use tokio::sync::Mutex;
+use tonic::codegen::http::status;
 
 use crate::errors::RLWServerError;
 use crate::job_processor::*;
@@ -18,21 +19,21 @@ const COMMAND_DIR: &str = "./tests/test_env";
 /// underlying process.
 pub struct Job {
     /// Job status
-    pub status: Option<status_response::ProcessStatus>,
+    pub status: Mutex<Option<status_response::ProcessStatus>>,
 
     /// Stderr and stdout output from the job.
     pub output: Mutex<Vec<u8>>,
 
     /// Job process ID
-    pub pid: Option<u32>,
+    pub pid: Mutex<Option<u32>>,
 }
 
 impl Job {
     pub fn new() -> Self {
         Self {
-            status: None,
+            status: Mutex::new(None),
             output: Mutex::new(Vec::new()),
-            pid: None,
+            pid: Mutex::new(None),
         }
     }
     pub async fn new_command(
@@ -50,8 +51,12 @@ impl Job {
         });
 
         if let CommandType::Start = command_type {
-            // self.pid = Some(rx_pid.recv()?);
-            // self.status = Some(status_response::ProcessStatus::Running(true))
+            // send down channel
+            let mut pid = self.pid.lock().await;
+            *pid = Some(rx_pid.recv()?);
+
+            let mut status = self.status.lock().await;
+            *status = Some(status_response::ProcessStatus::Running(true))
         }
 
         for rec in rx_output {
@@ -66,28 +71,53 @@ impl Job {
             .join()
             .map_err(|e| RLWServerError(format!("Error joining on processing thread {:?}", e)))??;
 
+        println!("\nhere\n");
         // Finished with signal
         if let Some(s) = status.signal() {
             // self.status = Some(status_response::ProcessStatus::Signal(s));
+
+            let mut status = self.status.lock().await;
+            *status = Some(status_response::ProcessStatus::Signal(s));
             return Ok(());
         }
 
         // Process finished with exit code
         if let Some(c) = status.code() {
             // self.status = Some(status_response::ProcessStatus::Signal(c));
+
+            println!("\nhere2\n");
+            let mut status = self.status.lock().await;
+            *status = Some(status_response::ProcessStatus::ExitCode(c));
             return Ok(());
         }
 
-        // Err(RLWServerError(
-        //     "Job processing thread closed before finishing the job".to_string(),
-        // ))
-        Ok(())
+        Err(RLWServerError(
+            "Job processing thread closed before finishing the job".to_string(),
+        ))
+        // Ok(())
     }
 
     pub async fn read_test(&self) {
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        // while matches!(
+        //     self.status.lock().await.as_ref().expect("bad"),
+        //     status_response::ProcessStatus::Running(true)
+        // ) {
+        // tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        //     println!("Rec {:?}", std::str::from_utf8(&*self.output.lock().await));
+        // }
+
         loop {
+            let status = self.status.lock().await;
+            if matches!(*status, Some(status_response::ProcessStatus::Running(true))) {
+                println!(
+                    "\nRec {:?}\n",
+                    std::str::from_utf8(&*self.output.lock().await)
+                );
+            } else {
+                break;
+            }
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-            println!("Rec {:?}", std::str::from_utf8(&*self.output.lock().await));
         }
     }
 }
