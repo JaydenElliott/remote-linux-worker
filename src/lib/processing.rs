@@ -37,6 +37,7 @@ pub fn execute_command(
 
     // Send PID
     if let Some(t) = tx_pid {
+        println!("PID = {:?}", output.id());
         t.send(output.id())?;
     }
 

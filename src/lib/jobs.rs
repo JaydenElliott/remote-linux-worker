@@ -58,6 +58,7 @@ impl Job {
             execute_command(command, args, Some(&tx_pid), &tx_output)
         });
 
+        // Scope below required to allow for the lock release
         {
             let mut pid = self.pid.lock().await;
             *pid = Some(rx_pid.recv()?);
@@ -92,22 +93,41 @@ impl Job {
 
         // Thread closed but job had not finished
         Err(RLWServerError(
-            "Job processing thread closed before finishing the job".to_string(),
+            "Job processing thread closed before it had finished processing".to_string(),
         ))
     }
 
-    pub async fn stop_command(&self, force: bool) -> Result<(), RLWServerError> {
+    /// Kill the requested process.
+    ///
+    /// Sending a kill signal starts a new process; because of this the request is
+    /// handled similarly to `job.start_command()`. The output of the kill process
+    /// will be sent to the same output buffer as the process you are signaling to
+    /// kill. The status of the kill signal process will not be stored.
+    ///
+    /// # Arguments
+    ///
+    /// * `pid` - the process id of the process to send the kill signal to.
+    /// * `forced` - if true, the signal sent will be SIGKILL, and SIGTERM otherwise
+    ///
+    pub async fn stop_command(&self, pid: String, forced: bool) -> Result<(), RLWServerError> {
         let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
 
-        // Process job
+        // Process kill signal
         let thread = thread::spawn(move || -> Result<ExitStatus, RLWServerError> {
-            let s1 = "kill".to_string();
-            let s2 = vec!["-9".to_string()];
-            let s3 = vec!["-15".to_string()];
-            if force {
-                return execute_command(s1, s2, None, &tx_output);
+            if forced {
+                return execute_command(
+                    "kill".to_string(),
+                    vec!["-9".to_string(), pid],
+                    None,
+                    &tx_output,
+                );
             }
-            return execute_command(s1, s3, None, &tx_output);
+            return execute_command(
+                "kill".to_string(),
+                vec!["-15".to_string(), pid],
+                None,
+                &tx_output,
+            );
         });
 
         // Populate stdout/stderr output
@@ -116,27 +136,13 @@ impl Job {
         }
 
         // Process finished
-        let status = thread
-            .join()
-            .map_err(|e| RLWServerError(format!("Error joining on processing thread {:?}", e)))??;
-
-        // Finished with signal
-        if let Some(s) = status.signal() {
-            let mut status = self.status.lock().await;
-            *status = Some(status_response::ProcessStatus::Signal(s));
-            return Ok(());
-        }
-
-        // Finished with exit code
-        if let Some(c) = status.code() {
-            let mut status = self.status.lock().await;
-            *status = Some(status_response::ProcessStatus::ExitCode(c));
-            return Ok(());
-        }
+        thread.join().map_err(|e| {
+            RLWServerError(format!("Error joining on kill signal thread {:?}", e))
+        })??;
 
         // Thread closed but job had not finished
         Err(RLWServerError(
-            "Job processing thread closed before finishing the job".to_string(),
+            "Kill signal process thread closed before it had finished processing ".to_string(),
         ))
     }
 
@@ -199,7 +205,7 @@ mod tests {
         // let arc3 = Arc::clone(&job_arc);
         // let pid = arc2.pid.lock().await.expect("no pid");
         // let task3 = tokio::spawn(async move {
-        //     arc3.stop_command(false).await.expect("bad in here");
+        //     arc3.start_command("kill").await.expect("bad in here");
         // });
 
         let _ = task1.await?;
