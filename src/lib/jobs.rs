@@ -38,19 +38,17 @@ impl Job {
         }
     }
 
-    /// Start a new process, and populate `self` with the pid, output
+    /// Start a new process, and populates the job pid, output
     /// and status from the process.
     ///
     /// # Arguments
     ///
     /// * `command`      - Command to execute. Examples: "cargo", "ls", , "/bin/bash"
     /// * `args`         - Arguments to accompany the command. Examples: "--version", "-a", "./file.sh"
-    /// * `command_type` - Type of grpc request processing a new command. Will be either Start or Stop
-    pub async fn new_command(
+    pub async fn start_command(
         &self,
         command: String,
         args: Vec<String>,
-        command_type: CommandType,
     ) -> Result<(), RLWServerError> {
         let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
@@ -60,13 +58,56 @@ impl Job {
             execute_command(command, args, Some(&tx_pid), &tx_output)
         });
 
-        if let CommandType::Start = command_type {
-            let mut pid = self.pid.lock().await;
-            *pid = Some(rx_pid.recv()?);
+        // TODO: MAY BE HERE IT IS AWAITING??
+        let mut pid = self.pid.lock().await;
+        *pid = Some(rx_pid.recv()?);
 
-            let mut status = self.status.lock().await;
-            *status = Some(status_response::ProcessStatus::Running(true))
+        let mut status = self.status.lock().await;
+        *status = Some(status_response::ProcessStatus::Running(true));
+
+        // Populate stdout/stderr output
+        for rec in rx_output {
+            self.output.lock().await.push(rec);
         }
+
+        // Process finished
+        let status = thread
+            .join()
+            .map_err(|e| RLWServerError(format!("Error joining on processing thread {:?}", e)))??;
+
+        // Finished with signal
+        if let Some(s) = status.signal() {
+            let mut status = self.status.lock().await;
+            *status = Some(status_response::ProcessStatus::Signal(s));
+            return Ok(());
+        }
+
+        // Finished with exit code
+        if let Some(c) = status.code() {
+            let mut status = self.status.lock().await;
+            *status = Some(status_response::ProcessStatus::ExitCode(c));
+            return Ok(());
+        }
+
+        // Thread closed but job had not finished
+        Err(RLWServerError(
+            "Job processing thread closed before finishing the job".to_string(),
+        ))
+    }
+
+    pub async fn stop_command(&self, force: bool) -> Result<(), RLWServerError> {
+        let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+
+        // Process job
+        let thread = thread::spawn(move || -> Result<ExitStatus, RLWServerError> {
+            let s1 = "kill".to_string();
+            let s2 = vec!["-9".to_string()];
+            let s3 = vec!["-15".to_string()];
+            if force {
+                return execute_command(s1, s2, None, &tx_output);
+            }
+            return execute_command(s1, s3, None, &tx_output);
+        });
 
         // Populate stdout/stderr output
         for rec in rx_output {
@@ -128,13 +169,6 @@ impl Job {
     }
 }
 
-pub enum CommandType {
-    Start,
-    Stop,
-    Stream,
-    Status,
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -148,13 +182,9 @@ mod tests {
 
         let arc1 = Arc::clone(&job_arc);
         let task1 = tokio::spawn(async move {
-            arc1.new_command(
-                "/bin/bash".to_string(),
-                vec!["./test2.sh".to_string()],
-                CommandType::Start,
-            )
-            .await
-            .expect("bad in here");
+            arc1.start_command("/bin/bash".to_string(), vec!["./test2.sh".to_string()])
+                .await
+                .expect("bad in here");
         });
 
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -168,13 +198,7 @@ mod tests {
         let arc3 = Arc::clone(&job_arc);
         let pid = arc2.pid.lock().await.expect("no pid");
         let task2 = tokio::spawn(async move {
-            arc3.new_command(
-                "kill".to_string(),
-                vec!["-9".to_string(), pid.to_string()],
-                CommandType::Start,
-            )
-            .await
-            .expect("bad in here");
+            arc3.stop_command(false).await.expect("bad in here");
         });
 
         let _ = task1.await?;
