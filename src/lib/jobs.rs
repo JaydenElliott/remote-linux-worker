@@ -29,6 +29,7 @@ pub struct Job {
 }
 
 impl Job {
+    /// Construct a new Job
     pub fn new() -> Self {
         Self {
             status: Mutex::new(None),
@@ -36,8 +37,9 @@ impl Job {
             pid: Mutex::new(None),
         }
     }
+
+    ///
     pub async fn new_command(
-        // &mut self,
         &self,
         command: String,
         args: Vec<String>,
@@ -60,10 +62,7 @@ impl Job {
         }
 
         for rec in rx_output {
-            // println!("Rec {:?}", std::str::from_utf8(&[rec]));
             self.output.lock().await.push(rec);
-            // self.output.push(rec)
-            // Send grpc msg here?
         }
 
         // Process finished
@@ -71,21 +70,15 @@ impl Job {
             .join()
             .map_err(|e| RLWServerError(format!("Error joining on processing thread {:?}", e)))??;
 
-        println!("\nhere\n");
         // Finished with signal
         if let Some(s) = status.signal() {
-            // self.status = Some(status_response::ProcessStatus::Signal(s));
-
             let mut status = self.status.lock().await;
             *status = Some(status_response::ProcessStatus::Signal(s));
             return Ok(());
         }
 
-        // Process finished with exit code
+        // Finished with exit code
         if let Some(c) = status.code() {
-            // self.status = Some(status_response::ProcessStatus::Signal(c));
-
-            println!("\nhere2\n");
             let mut status = self.status.lock().await;
             *status = Some(status_response::ProcessStatus::ExitCode(c));
             return Ok(());
@@ -94,30 +87,34 @@ impl Job {
         Err(RLWServerError(
             "Job processing thread closed before finishing the job".to_string(),
         ))
-        // Ok(())
     }
 
-    pub async fn read_test(&self) {
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        // while matches!(
-        //     self.status.lock().await.as_ref().expect("bad"),
-        //     status_response::ProcessStatus::Running(true)
-        // ) {
-        // tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        //     println!("Rec {:?}", std::str::from_utf8(&*self.output.lock().await));
-        // }
-
-        loop {
-            let status = self.status.lock().await;
-            if matches!(*status, Some(status_response::ProcessStatus::Running(true))) {
-                println!(
-                    "\nRec {:?}\n",
-                    std::str::from_utf8(&*self.output.lock().await)
-                );
+    pub async fn stream_output(&self) {
+        let mut read_idx: usize = 0;
+        while matches!(
+            *self.status.lock().await,
+            Some(status_response::ProcessStatus::Running(true))
+        ) {
+            let o = self.output.lock().await;
+            // Only read each letter once
+            // If finished reading "so far"
+            // just spin and wait
+            if read_idx < o.len() {
+                // stream o[read_idx]
+                println!("Read idx = {:?}", o[read_idx]);
+                read_idx += 1;
             } else {
-                break;
+                // should I sleep here
             }
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        }
+
+        // In the event that the process is no longer running,
+        // but the output wasn't finished being streamed, stream
+        // the rest.
+        let o = self.output.lock().await;
+        while read_idx < o.len() {
+            println!("Read idx after = {:?}", o[read_idx]);
+            read_idx += 1;
         }
     }
 }
@@ -144,13 +141,14 @@ mod tests {
         let task1 = tokio::spawn(async move {
             arc1.new_command(
                 "/bin/bash".to_string(),
-                vec!["./test1.sh".to_string()],
+                vec!["./test2.sh".to_string()],
                 CommandType::Start,
             )
             .await
             .expect("bad in here");
         });
 
+        tokio::time::sleep(tokio::time::Duration::from_millis(3000)).await;
         let arc2 = Arc::clone(&job_arc);
         let task2 = tokio::spawn(async move {
             arc2.read_test().await;
@@ -160,11 +158,5 @@ mod tests {
         let _ = task2.await?;
 
         Ok(())
-        // job.new_command(
-        //     "/bin/bash".to_string(),
-        //     vec!["./test1.sh".to_string()],
-        //     CommandType::Start,
-        // )
-        // .expect("bad123");
     }
 }
