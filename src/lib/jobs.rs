@@ -1,6 +1,8 @@
 //! Exposes all the required types and type impls for the
 //! rlw server to run.
 
+use tokio::sync::Mutex;
+
 use crate::errors::RLWServerError;
 use crate::job_processor::*;
 use crate::processing::execute_command;
@@ -19,7 +21,7 @@ pub struct Job {
     pub status: Option<status_response::ProcessStatus>,
 
     /// Stderr and stdout output from the job.
-    pub output: Vec<u8>,
+    pub output: Mutex<Vec<u8>>,
 
     /// Job process ID
     pub pid: Option<u32>,
@@ -29,12 +31,13 @@ impl Job {
     pub fn new() -> Self {
         Self {
             status: None,
-            output: Vec::new(),
+            output: Mutex::new(Vec::new()),
             pid: None,
         }
     }
-    pub fn new_command(
-        &mut self,
+    pub async fn new_command(
+        // &mut self,
+        &self,
         command: String,
         args: Vec<String>,
         command_type: CommandType,
@@ -47,13 +50,14 @@ impl Job {
         });
 
         if let CommandType::Start = command_type {
-            self.pid = Some(rx_pid.recv()?);
-            self.status = Some(status_response::ProcessStatus::Running(true))
+            // self.pid = Some(rx_pid.recv()?);
+            // self.status = Some(status_response::ProcessStatus::Running(true))
         }
 
         for rec in rx_output {
-            println!("Rec {:?}", std::str::from_utf8(&[rec]));
-            self.output.push(rec)
+            // println!("Rec {:?}", std::str::from_utf8(&[rec]));
+            self.output.lock().await.push(rec);
+            // self.output.push(rec)
             // Send grpc msg here?
         }
 
@@ -64,19 +68,27 @@ impl Job {
 
         // Finished with signal
         if let Some(s) = status.signal() {
-            self.status = Some(status_response::ProcessStatus::Signal(s));
+            // self.status = Some(status_response::ProcessStatus::Signal(s));
             return Ok(());
         }
 
         // Process finished with exit code
         if let Some(c) = status.code() {
-            self.status = Some(status_response::ProcessStatus::Signal(c));
+            // self.status = Some(status_response::ProcessStatus::Signal(c));
             return Ok(());
         }
 
-        Err(RLWServerError(
-            "Job processing thread closed before finishing the job".to_string(),
-        ))
+        // Err(RLWServerError(
+        //     "Job processing thread closed before finishing the job".to_string(),
+        // ))
+        Ok(())
+    }
+
+    pub async fn read_test(&self) {
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            println!("Rec {:?}", std::str::from_utf8(&*self.output.lock().await));
+        }
     }
 }
 
@@ -89,16 +101,40 @@ pub enum CommandType {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
 
-    #[test]
-    fn run_script() {
-        let mut job = Job::new();
-        job.new_command(
-            "/bin/bash".to_string(),
-            vec!["./test1.sh".to_string()],
-            CommandType::Start,
-        )
-        .expect("bad123");
+    #[tokio::test(flavor = "multi_thread")]
+    async fn run_script() -> Result<(), Box<dyn std::error::Error>> {
+        let job = Job::new();
+        let job_arc = Arc::new(job);
+
+        let arc1 = Arc::clone(&job_arc);
+        let task1 = tokio::spawn(async move {
+            arc1.new_command(
+                "/bin/bash".to_string(),
+                vec!["./test1.sh".to_string()],
+                CommandType::Start,
+            )
+            .await
+            .expect("bad in here");
+        });
+
+        let arc2 = Arc::clone(&job_arc);
+        let task2 = tokio::spawn(async move {
+            arc2.read_test().await;
+        });
+
+        let _ = task1.await?;
+        let _ = task2.await?;
+
+        Ok(())
+        // job.new_command(
+        //     "/bin/bash".to_string(),
+        //     vec!["./test1.sh".to_string()],
+        //     CommandType::Start,
+        // )
+        // .expect("bad123");
     }
 }
