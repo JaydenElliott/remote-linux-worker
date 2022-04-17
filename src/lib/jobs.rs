@@ -11,7 +11,7 @@ use crate::processing::execute_command;
 use std::{os::unix::prelude::ExitStatusExt, process::ExitStatus};
 
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::thread;
+use std::{mem, thread};
 
 const COMMAND_DIR: &str = "./tests/test_env";
 
@@ -109,8 +109,16 @@ impl Job {
     /// * `pid` - the process id of the process to send the kill signal to.
     /// * `forced` - if true, the signal sent will be SIGKILL, and SIGTERM otherwise
     ///
-    pub async fn stop_command(&self, pid: String, forced: bool) -> Result<(), RLWServerError> {
+    pub async fn stop_command(&self, forced: bool) -> Result<(), RLWServerError> {
         let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+
+        let lock_handle = self.pid.lock().await;
+        let pid = lock_handle
+            .ok_or(RLWServerError(
+                "There is no running process associated with this job".to_string(),
+            ))?
+            .to_string();
+        mem::drop(lock_handle);
 
         // Process kill signal
         let thread = thread::spawn(move || -> Result<ExitStatus, RLWServerError> {
@@ -140,12 +148,10 @@ impl Job {
             RLWServerError(format!("Error joining on kill signal thread {:?}", e))
         })??;
 
-        // Thread closed but job had not finished
-        Err(RLWServerError(
-            "Kill signal process thread closed before it had finished processing ".to_string(),
-        ))
+        Ok(())
     }
 
+    /// Stream the output of the job process.
     pub async fn stream_output(&self) {
         let mut read_idx: usize = 0;
         while matches!(
@@ -200,16 +206,17 @@ mod tests {
             arc2.stream_output().await;
         });
 
-        // tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-        // let arc2 = Arc::clone(&job_arc);
-        // let arc3 = Arc::clone(&job_arc);
-        // let pid = arc2.pid.lock().await.expect("no pid");
-        // let task3 = tokio::spawn(async move {
-        //     arc3.start_command("kill").await.expect("bad in here");
-        // });
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        let arc3 = Arc::clone(&job_arc);
+        let arc4 = Arc::clone(&job_arc);
+        let pid = arc3.pid.lock().await.expect("no pid");
+        let task3 = tokio::spawn(async move {
+            arc4.stop_command(true).await.expect("bad in here");
+        });
 
         let _ = task1.await?;
         let _ = task2.await?;
+        let _ = task3.await?;
 
         Ok(())
     }
