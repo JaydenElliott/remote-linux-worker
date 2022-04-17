@@ -13,13 +13,14 @@ const COMMAND_DIR: &str = "./tests/test_env";
 
 /// Executes a command using the arguments provided, streaming the output result.
 ///
-/// * Arguments
-/// * command   - Command to execute. Examples: "cargo", "ls", , "/bin/bash"
-/// * args      - Arguments to accompany the command. Examples: "--version", "-a", "./file.sh"
-/// * tx_pid    - The channel producer used to send the process PID of the job started.
-///               Is `Some` if the command is `start` and None if `stop`.
-///               once and before any output.
-/// * tx_output - The channel producer used to stream the command results
+/// # Arguments
+///
+/// * `command`   - Command to execute. Examples: "cargo", "ls", , "/bin/bash"
+/// * `args`      - Arguments to accompany the command. Examples: "--version", "-a", "./file.sh"
+/// * `tx_pid`    - The channel producer used to send the process PID of the job started.
+///                 Is `Some` if the command is `start` and None if `stop`.
+///                 once and before any output.
+/// * `tx_output` - The channel producer used to stream the command results
 pub fn execute_command(
     command: String,
     args: Vec<String>,

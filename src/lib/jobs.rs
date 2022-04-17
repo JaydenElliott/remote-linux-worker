@@ -38,7 +38,14 @@ impl Job {
         }
     }
 
+    /// Start a new process, and populate `self` with the pid, output
+    /// and status from the process.
     ///
+    /// # Arguments
+    ///
+    /// * `command`      - Command to execute. Examples: "cargo", "ls", , "/bin/bash"
+    /// * `args`         - Arguments to accompany the command. Examples: "--version", "-a", "./file.sh"
+    /// * `command_type` - Type of grpc request processing a new command. Will be either Start or Stop
     pub async fn new_command(
         &self,
         command: String,
@@ -48,12 +55,12 @@ impl Job {
         let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
 
+        // Process job
         let thread = thread::spawn(move || -> Result<ExitStatus, RLWServerError> {
             execute_command(command, args, Some(&tx_pid), &tx_output)
         });
 
         if let CommandType::Start = command_type {
-            // send down channel
             let mut pid = self.pid.lock().await;
             *pid = Some(rx_pid.recv()?);
 
@@ -61,6 +68,7 @@ impl Job {
             *status = Some(status_response::ProcessStatus::Running(true))
         }
 
+        // Populate stdout/stderr output
         for rec in rx_output {
             self.output.lock().await.push(rec);
         }
@@ -84,6 +92,7 @@ impl Job {
             return Ok(());
         }
 
+        // Thread closed but job had not finished
         Err(RLWServerError(
             "Job processing thread closed before finishing the job".to_string(),
         ))
@@ -148,10 +157,24 @@ mod tests {
             .expect("bad in here");
         });
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(3000)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         let arc2 = Arc::clone(&job_arc);
         let task2 = tokio::spawn(async move {
-            arc2.read_test().await;
+            arc2.stream_output().await;
+        });
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+        let arc2 = Arc::clone(&job_arc);
+        let arc3 = Arc::clone(&job_arc);
+        let pid = arc2.pid.lock().await.expect("no pid");
+        let task2 = tokio::spawn(async move {
+            arc3.new_command(
+                "kill".to_string(),
+                vec!["-9".to_string(), pid.to_string()],
+                CommandType::Start,
+            )
+            .await
+            .expect("bad in here");
         });
 
         let _ = task1.await?;

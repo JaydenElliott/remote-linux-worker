@@ -8,8 +8,8 @@ echo "Error2!" 1>&2
 sleep 2
 echo BYE
 sleep 2
-# echo BYE2
-# sleep 2
-# echo "Error3!" 1>&2
-# sleep 2
+echo BYE2
+sleep 2
+echo "Error3!" 1>&2
+sleep 2
 exit 3
