@@ -1,6 +1,6 @@
 use core::fmt;
 use std::io;
-use std::sync::mpsc::{self, SendError};
+use std::sync::mpsc::{self, RecvError, SendError};
 
 /// TODO: write up for this error
 /// This is general purpose
@@ -30,6 +30,12 @@ impl From<mpsc::SendError<u32>> for RLWServerError {
 
 impl From<io::Error> for RLWServerError {
     fn from(err: io::Error) -> RLWServerError {
+        RLWServerError(err.to_string())
+    }
+}
+
+impl From<RecvError> for RLWServerError {
+    fn from(err: RecvError) -> RLWServerError {
         RLWServerError(err.to_string())
     }
 }

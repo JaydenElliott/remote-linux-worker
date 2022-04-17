@@ -47,18 +47,20 @@ impl Job {
         });
 
         if let CommandType::Start = command_type {
-            self.pid = Some(rx_pid.recv().expect("bad"));
+            self.pid = Some(rx_pid.recv()?);
             self.status = Some(status_response::ProcessStatus::Running(true))
         }
 
         for rec in rx_output {
-            // println!("Rec {:?}", std::str::from_utf8(&rec));
+            println!("Rec {:?}", std::str::from_utf8(&[rec]));
             self.output.push(rec)
             // Send grpc msg here?
         }
 
         // Process finished
-        let status = thread.join().expect("bad").expect("bad");
+        let status = thread
+            .join()
+            .map_err(|e| RLWServerError(format!("Error joining on processing thread {:?}", e)))??;
 
         // Finished with signal
         if let Some(s) = status.signal() {
