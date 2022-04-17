@@ -9,7 +9,9 @@ use std::process::Command;
 use std::sync::mpsc::Sender;
 use std::thread;
 
-const COMMAND_DIR: &str = "./tests/test_env";
+// Path to the directory where the processes will be run.
+// TODO: Make this a configurable part of the server
+const PROCESS_PATH: &str = "./tests/test_env";
 
 /// Executes a command using the arguments provided, streaming the output result.
 ///
@@ -18,8 +20,6 @@ const COMMAND_DIR: &str = "./tests/test_env";
 /// * `command`   - Command to execute. Examples: "cargo", "ls", , "/bin/bash"
 /// * `args`      - Arguments to accompany the command. Examples: "--version", "-a", "./file.sh"
 /// * `tx_pid`    - The channel producer used to send the process PID of the job started.
-///                 Is `Some` if the command is `start` and None if `stop`.
-///                 once and before any output.
 /// * `tx_output` - The channel producer used to stream the command results
 pub fn execute_command(
     command: String,
@@ -30,14 +30,13 @@ pub fn execute_command(
     // Start process
     let mut output = Command::new(command)
         .args(args)
-        .current_dir(COMMAND_DIR)
+        .current_dir(PROCESS_PATH)
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()?;
 
     // Send PID
     if let Some(t) = tx_pid {
-        println!("PID = {:?}", output.id());
         t.send(output.id())?;
     }
 

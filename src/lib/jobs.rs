@@ -13,8 +13,6 @@ use std::{os::unix::prelude::ExitStatusExt, process::ExitStatus};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::{mem, thread};
 
-const COMMAND_DIR: &str = "./tests/test_env";
-
 /// A user job containing information about the
 /// underlying process.
 pub struct Job {
@@ -58,10 +56,12 @@ impl Job {
             execute_command(command, args, Some(&tx_pid), &tx_output)
         });
 
+        // Set Process ID
         let mut pid = self.pid.lock().await;
         *pid = Some(rx_pid.recv()?);
         mem::drop(pid); // release guard
 
+        // Set status to Running
         let mut status = self.status.lock().await;
         *status = Some(status_response::ProcessStatus::Running(true));
         mem::drop(status); // release guard
@@ -105,11 +105,12 @@ impl Job {
     ///
     /// # Arguments
     ///
-    /// * `pid` - the process id of the process to send the kill signal to.
+    /// * `pid`    - the process id of the process to send the kill signal to.
     /// * `forced` - if true, the signal sent will be SIGKILL, and SIGTERM otherwise
     pub async fn stop_command(&self, forced: bool) -> Result<(), RLWServerError> {
         let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
 
+        // Get the PID of the job to kill
         let lock_handle = self.pid.lock().await;
         let pid = lock_handle
             .ok_or(RLWServerError(
@@ -118,7 +119,7 @@ impl Job {
             .to_string();
         mem::drop(lock_handle);
 
-        // Process kill signal
+        // Send kill signal
         let thread = thread::spawn(move || -> Result<ExitStatus, RLWServerError> {
             if forced {
                 return execute_command(
@@ -149,32 +150,31 @@ impl Job {
         Ok(())
     }
 
-    /// Stream the output of the job process.
+    /// Asynchronously stream the history and live output of the job process.
     pub async fn stream_output(&self) {
         let mut read_idx: usize = 0;
+
+        // While the job is running, first send the output history of the job,
+        // then continue to send new output entries until the process has finished.
         while matches!(
             *self.status.lock().await,
             Some(status_response::ProcessStatus::Running(true))
         ) {
-            let o = self.output.lock().await;
-            // Only read each letter once
-            // If finished reading "so far"
-            // just spin and wait
-            if read_idx < o.len() {
-                // stream o[read_idx]
-                println!("Read idx = {:?}", o[read_idx]);
+            let output = self.output.lock().await;
+            if read_idx < output.len() {
+                println!("Read idx = {:?}", output[read_idx]);
+                // GRPC response here
                 read_idx += 1;
-            } else {
-                // should I sleep here
             }
         }
 
-        // In the event that the process is no longer running,
-        // but the output wasn't finished being streamed, stream
-        // the rest.
-        let o = self.output.lock().await;
-        while read_idx < o.len() {
-            println!("Read idx after = {:?}", o[read_idx]);
+        // In the event that the process is no longer running but
+        // there is still remaining output entries to stream -
+        // finish streaming.
+        let output = self.output.lock().await;
+        while read_idx < output.len() {
+            println!("Read idx after = {:?}", output[read_idx]);
+            // GRPC response here
             read_idx += 1;
         }
     }
