@@ -84,3 +84,19 @@ pub enum CommandType {
     Stream,
     Status,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn run_script() {
+        let mut job = Job::new();
+        job.new_command(
+            "/bin/bash".to_string(),
+            vec!["./test1.sh".to_string()],
+            CommandType::Start,
+        )
+        .expect("bad123");
+    }
+}
