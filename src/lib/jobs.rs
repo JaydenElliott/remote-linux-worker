@@ -58,12 +58,13 @@ impl Job {
             execute_command(command, args, Some(&tx_pid), &tx_output)
         });
 
-        // TODO: MAY BE HERE IT IS AWAITING??
-        let mut pid = self.pid.lock().await;
-        *pid = Some(rx_pid.recv()?);
+        {
+            let mut pid = self.pid.lock().await;
+            *pid = Some(rx_pid.recv()?);
 
-        let mut status = self.status.lock().await;
-        *status = Some(status_response::ProcessStatus::Running(true));
+            let mut status = self.status.lock().await;
+            *status = Some(status_response::ProcessStatus::Running(true));
+        }
 
         // Populate stdout/stderr output
         for rec in rx_output {
@@ -193,13 +194,13 @@ mod tests {
             arc2.stream_output().await;
         });
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-        let arc2 = Arc::clone(&job_arc);
-        let arc3 = Arc::clone(&job_arc);
-        let pid = arc2.pid.lock().await.expect("no pid");
-        let task2 = tokio::spawn(async move {
-            arc3.stop_command(false).await.expect("bad in here");
-        });
+        // tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+        // let arc2 = Arc::clone(&job_arc);
+        // let arc3 = Arc::clone(&job_arc);
+        // let pid = arc2.pid.lock().await.expect("no pid");
+        // let task3 = tokio::spawn(async move {
+        //     arc3.stop_command(false).await.expect("bad in here");
+        // });
 
         let _ = task1.await?;
         let _ = task2.await?;
