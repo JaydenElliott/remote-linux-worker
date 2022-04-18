@@ -79,13 +79,13 @@ mod tests {
 
     /// Tests the execution of a new start command and the resulting output.
     ///
-    /// Files used: tests/tests_env/test1.sh
+    /// Files used: tests/scripts/start_process.sh
     #[test]
     fn test_start_script() -> Result<(), RLWServerError> {
         let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
         let command = "/bin/bash".to_string();
-        let args = vec!["./test1.sh".to_string()];
+        let args = vec!["../scripts/start_process.sh".to_string()];
 
         // Test command execution
         let t1 = thread::spawn(move || -> Result<(), RLWServerError> {

@@ -242,37 +242,151 @@ impl Job {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
 
     use super::*;
 
+    /// Tests the creation of a new job
     #[tokio::test(flavor = "multi_thread")]
-    async fn run_script() -> Result<(), Box<dyn std::error::Error>> {
+    async fn test_create() -> Result<(), RLWServerError> {
+        // Setup
+        let job = Job::new();
+        let command = "echo".to_string();
+        let test_string = "hello_test_create".to_string();
+
+        // Start
+        job.start_command(command, vec![test_string.clone()])
+            .await?;
+
+        let output = job.output.lock().await;
+        let expected = test_string + "\n";
+
+        assert_eq!(*output, expected.as_bytes());
+        Ok(())
+    }
+
+    /// Tests if the stop_command() function works
+    ///
+    /// Files used: tests/scripts/stop_job.sh
+    ///
+    /// The test process is the following:
+    /// 1. Start a job with the test script.
+    /// 2. Stop the job before it has time to finish.
+    /// 3. Check if the resulting output length is smaller than the expected
+    ///    output length had the job not failed
+    ///
+    /// TODO: With more time a better test simulation would be:
+    /// 1. Start a job with the test script and calculate the size of the output.
+    /// 2. Run the job again, but after 1/2 a second, stop the job.
+    /// 3. Assert that the output of the second job is smaller than the first.
+    /// This would remove the need to find the output of the first job to hard
+    /// code the length, like it was done below.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_stop() -> Result<(), RLWServerError> {
+        // Setup
         let job = Job::new();
         let job_arc = Arc::new(job);
 
-        let arc1 = Arc::clone(&job_arc);
-        let task1 = tokio::spawn(async move {
-            arc1.start_command("/bin/bash".to_string(), vec!["./test2.sh".to_string()])
+        let command = "/bin/bash".to_string();
+        let args = vec!["../scripts/stop_job.sh".to_string()];
+
+        // To test the stopped job against
+        let output_len = 18;
+
+        let start_job = Arc::clone(&job_arc);
+        let start_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
+            start_job
+                .start_command(command, args)
                 .await
-                .expect("bad in here");
+                .map_err(|_| RLWServerError("Failed to process command".to_string()))?;
+            Ok(())
         });
 
-        // Figure out a way to remove this
-        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-        let arc2 = Arc::clone(&job_arc);
-        let task2 = tokio::spawn(async move {
-            let (mut rx, stream_handle) = arc2.stream_job().await.expect("Bad");
+        // Arbitrary time between client starting and stopping job
+        tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+
+        // Stop job
+        let stop_job = Arc::clone(&job_arc);
+        let stop_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
+            stop_job.stop_command(false).await?;
+            assert!(stop_job.output.lock().await.len() < output_len);
+            Ok(())
+        });
+
+        start_handle
+            .await
+            .map_err(|e| RLWServerError(format!("{:?}", e)))??;
+        stop_handle
+            .await
+            .map_err(|e| RLWServerError(format!("{:?}", e)))??;
+
+        Ok(())
+    }
+
+    /// Tests if the stop_command() function works
+    ///
+    /// Files used: tests/scripts/stop_job.sh
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_stream() -> Result<(), RLWServerError> {
+        // Setup
+        let job = Job::new();
+        let job_arc = Arc::new(job);
+
+        // Start job
+        let start_ptr = Arc::clone(&job_arc);
+        let start_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
+            start_ptr
+                .start_command("/bin/bash".to_string(), vec!["./test2.sh".to_string()])
+                .await
+                .map_err(|_| RLWServerError("Failed to map result to utf8 str".to_string()))?;
+            Ok(())
+        });
+
+        // Arbitrary time between client starting and stopping job
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        let stop_ptr = Arc::clone(&job_arc);
+        let stop_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
+            let (mut rx, stream_handle) = stop_ptr.stream_job().await?;
             while let Some(i) = rx.recv().await {
                 println!("i = {:?}", i.expect("bad"));
             }
 
             stream_handle.await.expect("bad").expect("bad");
+            Ok(())
         });
-
-        let _ = task1.await?;
-        let _ = task2.await?;
-
         Ok(())
     }
+
+    // #[tokio::test(flavor = "multi_thread")]
+    // async fn run_script() -> Result<(), Box<dyn std::error::Error>> {
+    //     let job = Job::new();
+    //     let job_arc = Arc::new(job);
+
+    //     let arc1 = Arc::clone(&job_arc);
+    //     let task1 = tokio::spawn(async move {
+    //         arc1.start_command("/bin/bash".to_string(), vec!["./test2.sh".to_string()])
+    //             .await
+    //             .expect("bad in here");
+    //     });
+
+    //     // Figure out a way to remove this
+    //     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+    //     let arc2 = Arc::clone(&job_arc);
+    //     let task2 = tokio::spawn(async move {
+    //         let (mut rx, stream_handle) = arc2.stream_job().await.expect("Bad");
+    //         while let Some(i) = rx.recv().await {
+    //             println!("i = {:?}", i.expect("bad"));
+    //         }
+
+    //         stream_handle.await.expect("bad").expect("bad");
+    //     });
+
+    //     let _ = task1.await?;
+    //     let _ = task2.await?;
+
+    //     Ok(())
+    // }
 }
