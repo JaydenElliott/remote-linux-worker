@@ -114,13 +114,18 @@ mod tests {
         Ok(())
     }
 
+    /// Tests if an invalid command raises an error correctly
     #[test]
     fn test_incorrect_command() -> Result<(), RLWServerError> {
-        let (tx_output, _): (Sender<u8>, Receiver<u8>) = mpsc::channel();
-        let (tx_pid, _): (Sender<u32>, Receiver<u32>) = mpsc::channel();
-        let command = "asdf".to_string();
-        let args = vec!["-aaa".to_string()];
-        execute_command(command, args, Some(&tx_pid), &tx_output)?;
+        // Setup
+        let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+        let (tx_pid, rx_input): (Sender<u32>, Receiver<u32>) = mpsc::channel();
+        let command = "asdfasdf".to_string();
+        let args = vec!["-aa".to_string()];
+
+        // Expected failure "No Such file or directory (os error 2)
+        assert!(execute_command(command, args, Some(&tx_pid), &tx_output).is_err());
+
         Ok(())
     }
 }
