@@ -2,13 +2,15 @@
 //! rlw server to run.
 
 use tokio::sync::Mutex;
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::codegen::http::status;
-use tonic::Response;
+use tonic::{Response, Status};
 
 use crate::errors::RLWServerError;
 use crate::job_processor::*;
 use crate::processing::execute_command;
 
+use std::sync::Arc;
 use std::{os::unix::prelude::ExitStatusExt, process::ExitStatus};
 
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -151,20 +153,30 @@ impl Job {
         Ok(())
     }
 
-    /// Asynchronously stream the history and live output of the job process.
-    pub async fn stream_output(&self) {
-        let mut read_idx: usize = 0;
+    // pub async fn process_stream(
+    //     self: Arc<Job>,
+    // ) -> Result<Response<ReceiverStream<Result<StreamResponse, Status>>>, Status> {
+    //     let (mut tx, rx): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+    //     tokio::spawn(async move {
+    //         self.stream_output(tx).await;
+    //     });
 
+    //     Ok(Response::new(ReceiverStream::new(rx)))
+    // }
+
+    /// Asynchronously stream the history and live output of the job process.
+    pub async fn stream_output(&self, tx: Sender<u8>) -> Result<(), RLWServerError> {
         // While the job is running, first send the output history of the job,
         // then continue to send new output entries until the process has finished.
+        let mut read_idx: usize = 0;
         while matches!(
             *self.status.lock().await,
             status_response::ProcessStatus::Running(true)
         ) {
             let output = self.output.lock().await;
             if read_idx < output.len() {
-                println!("Read idx = {:?}", output[read_idx]);
-                // GRPC response here
+                // println!("Read idx = {:?}", output[read_idx]);
+                tx.send(output[read_idx])?;
                 read_idx += 1;
             }
         }
@@ -178,6 +190,7 @@ impl Job {
             // GRPC response here
             read_idx += 1;
         }
+        Ok(())
     }
 
     ///
