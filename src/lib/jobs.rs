@@ -53,8 +53,7 @@ impl Job {
         }
     }
 
-    /// Start a new process, and populates the job pid, output
-    /// and status from the process.
+    /// Start a new process, and populates the job pid, output and status from the process.
     ///
     /// # Arguments
     ///
@@ -107,7 +106,7 @@ impl Job {
             return Ok(());
         }
 
-        // Thread closed but job had not finished
+        // Thread closed job not yet finished
         Err(RLWServerError(
             "Job processing thread closed before it had finished processing".to_string(),
         ))
@@ -186,6 +185,7 @@ impl Job {
         ),
         RLWServerError,
     > {
+        // TODO: update the buffer size - idk what it should be yet
         let (tx, rx) = tokio_mpsc::channel(STREAM_BUFFER_SIZE);
         let stream_handle = tokio::spawn(async move {
             let mut read_idx;
@@ -202,7 +202,6 @@ impl Job {
                 if let Err(e) = res {
                     return Err(RLWServerError(format!("{:?}", e)));
                 }
-
                 read_idx = output_guard.len();
             }
 
@@ -213,39 +212,35 @@ impl Job {
             ) {
                 let output = self.output.lock().await;
                 if read_idx < output.len() {
-                    let resp = StreamResponse {
+                    tx.send(Ok(StreamResponse {
                         output: vec![output[read_idx]],
-                    };
-                    tx.send(Ok(resp)).await?;
+                    }))
+                    .await?;
                     read_idx += 1;
                 }
             }
 
-            // In the event that the process is no longer running but
-            // there is still remaining output entries to stream -
-            // finish streaming.
+            // In the event that the process is no longer running but there is still
+            // remaining output entries to stream - finish streaming.
             let output = self.output.lock().await;
             while read_idx < output.len() {
-                println!("Read idx after = {:?}", output[read_idx]);
                 let resp = StreamResponse {
                     output: vec![output[read_idx]],
                 };
                 tx.send(Ok(resp)).await?;
                 read_idx += 1;
             }
-
             Ok(())
         });
-
         Ok((rx, stream_handle))
     }
 
-    /// TODO
-    pub async fn status(&self) -> Result<Response<StatusResponse>, RLWServerError> {
+    /// Returns the job status object
+    pub async fn status(&self) -> Result<StatusResponse, RLWServerError> {
         let status = self.status.lock().await.clone();
-        Ok(Response::new(StatusResponse {
+        Ok(StatusResponse {
             process_status: Some(status),
-        }))
+        })
     }
 }
 
