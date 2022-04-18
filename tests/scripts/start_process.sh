@@ -1,4 +1,4 @@
-echo HELLO_WORLD
-sleep 1
-echo "Error1!" 1>&2
-exit 3
+rm temp.txt
+echo temp file removed
+touch temp.txt
+echo temp file created
