@@ -2,6 +2,8 @@ use core::fmt;
 use std::io;
 use std::sync::mpsc::{self, RecvError, SendError};
 
+use crate::job_processor;
+
 /// TODO: write up for this error
 /// This is general purpose
 /// in production would have different errors for different types etc..
@@ -36,6 +38,16 @@ impl From<io::Error> for RLWServerError {
 
 impl From<RecvError> for RLWServerError {
     fn from(err: RecvError) -> RLWServerError {
+        RLWServerError(err.to_string())
+    }
+}
+
+impl<T> From<tokio::sync::mpsc::error::SendError<Result<job_processor::StreamResponse, T>>>
+    for RLWServerError
+{
+    fn from(
+        err: tokio::sync::mpsc::error::SendError<Result<job_processor::StreamResponse, T>>,
+    ) -> RLWServerError {
         RLWServerError(err.to_string())
     }
 }

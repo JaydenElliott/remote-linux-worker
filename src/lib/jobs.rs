@@ -173,23 +173,26 @@ impl Job {
     /// * self: Arc<Job> - Arc of self. Required in order to use self.output in async tokio thread.
     ///
     /// # Returns
+    ///
+    /// The function returns a result with a tuple containing the following types:
     /// * StreamResponse Receiver - type to be used by tonic to stream output to the client.
     /// * JoinHandle              - used to propagate errors up to the main thread in order to be handled.
     pub async fn stream_job(
         self: Arc<Job>,
-    ) -> (
-        tokio_mpsc::Receiver<Result<StreamResponse, Status>>,
-        JoinHandle<Result<(), RLWServerError>>,
-    ) {
+    ) -> Result<
+        (
+            tokio_mpsc::Receiver<Result<StreamResponse, Status>>,
+            JoinHandle<Result<(), RLWServerError>>,
+        ),
+        RLWServerError,
+    > {
         let (tx, rx) = tokio_mpsc::channel(STREAM_BUFFER_SIZE);
-
         let stream_handle = tokio::spawn(async move {
             let mut read_idx;
 
-            // Send the job history
+            // Send the client the job history
             {
                 let output_guard = self.output.lock().await;
-
                 let res = tx
                     .send(Ok(StreamResponse {
                         output: output_guard.clone(),
@@ -213,7 +216,7 @@ impl Job {
                     let resp = StreamResponse {
                         output: vec![output[read_idx]],
                     };
-                    tx.send(Ok(resp)).await.expect("Bad");
+                    tx.send(Ok(resp)).await?;
                     read_idx += 1;
                 }
             }
@@ -227,14 +230,14 @@ impl Job {
                 let resp = StreamResponse {
                     output: vec![output[read_idx]],
                 };
-                tx.send(Ok(resp)).await.expect("Bad");
+                tx.send(Ok(resp)).await?;
                 read_idx += 1;
             }
 
             Ok(())
         });
 
-        (rx, stream_handle)
+        Ok((rx, stream_handle))
     }
 
     /// TODO
@@ -268,7 +271,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
         let arc2 = Arc::clone(&job_arc);
         let task2 = tokio::spawn(async move {
-            let (mut rx, stream_handle) = arc2.stream_job().await;
+            let (mut rx, stream_handle) = arc2.stream_job().await.expect("Bad");
             while let Some(i) = rx.recv().await {
                 println!("i = {:?}", i.expect("bad"));
             }
