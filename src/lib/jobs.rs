@@ -2,6 +2,7 @@
 //! rlw server to run.
 
 use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Response, Status};
 
@@ -17,7 +18,14 @@ use std::{mem, thread};
 
 use tokio::sync::mpsc as tokio_mpsc;
 
-type StreamT = ReceiverStream<Result<StreamResponse, Status>>;
+/**
+ *
+ *
+ *
+ *
+ *
+ * TODO FIGURE OUT WAY TO UPDATE PID IMMEDIATELY - just unlock mutex from grpc level ez
+ */
 
 // TODO update this
 const STREAM_BUFFER_SIZE: usize = 100;
@@ -159,34 +167,49 @@ impl Job {
         Ok(())
     }
 
-    /// Asynchronously stream the history and live output of the job process.
-    pub async fn process_stream(
+    /// Stream the history and all upcoming output from `self.start_command()`.
+    ///
+    /// # Arguments
+    /// * self: Arc<Job> - Arc of self. Required in order to use self.output in async tokio thread.
+    ///
+    /// # Returns
+    /// * StreamResponse Receiver - type to be used by tonic to stream output to the client.
+    /// * JoinHandle              - used to propagate errors up to the main thread in order to be handled.
+    pub async fn stream_job(
         self: Arc<Job>,
-    ) -> Result<tokio_mpsc::Receiver<Result<StreamResponse, Status>>, RLWServerError> {
+    ) -> (
+        tokio_mpsc::Receiver<Result<StreamResponse, Status>>,
+        JoinHandle<Result<(), RLWServerError>>,
+    ) {
         let (tx, rx) = tokio_mpsc::channel(STREAM_BUFFER_SIZE);
 
-        tokio::spawn(async move {
+        let stream_handle = tokio::spawn(async move {
             let mut read_idx;
 
             // Send the job history
-            let output_guard = self.output.lock().await;
-            tx.send(Ok(StreamResponse {
-                output: output_guard.clone(),
-            }))
-            .await
-            .expect("Bad");
-            read_idx = output_guard.len(); // TODO: could be wrong
-            mem::drop(output_guard);
+            {
+                let output_guard = self.output.lock().await;
 
-            // While the job is running, first send the output history of the job,
-            // then continue to send new output entries until the process has finished.
+                let res = tx
+                    .send(Ok(StreamResponse {
+                        output: output_guard.clone(),
+                    }))
+                    .await;
+
+                if let Err(e) = res {
+                    return Err(RLWServerError(format!("{:?}", e)));
+                }
+
+                read_idx = output_guard.len();
+            }
+
+            // While the job is running, send new output entries
             while matches!(
                 *self.status.lock().await,
                 status_response::ProcessStatus::Running(true)
             ) {
                 let output = self.output.lock().await;
                 if read_idx < output.len() {
-                    // println!("Read idx = {:?}", output[read_idx]);
                     let resp = StreamResponse {
                         output: vec![output[read_idx]],
                     };
@@ -207,12 +230,12 @@ impl Job {
                 tx.send(Ok(resp)).await.expect("Bad");
                 read_idx += 1;
             }
+
+            Ok(())
         });
 
-        Ok(rx)
+        (rx, stream_handle)
     }
-
-    pub async fn process_stream2(self: Arc<Job>) {}
 
     /// TODO
     pub async fn status(&self) -> Result<Response<StatusResponse>, RLWServerError> {
@@ -241,14 +264,16 @@ mod tests {
                 .expect("bad in here");
         });
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(5000)).await;
+        // Figure out a way to remove this
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
         let arc2 = Arc::clone(&job_arc);
         let task2 = tokio::spawn(async move {
-            let mut a = arc2.process_stream().await.expect("error with stream");
-            while let Some(i) = a.recv().await {
+            let (mut rx, stream_handle) = arc2.stream_job().await;
+            while let Some(i) = rx.recv().await {
                 println!("i = {:?}", i.expect("bad"));
             }
-            // arc2.test().await.expect("Err with stream");
+
+            stream_handle.await.expect("bad").expect("bad");
         });
 
         // tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
