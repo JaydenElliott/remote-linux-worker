@@ -165,7 +165,49 @@ impl Job {
     ) -> Result<tokio_mpsc::Receiver<Result<StreamResponse, Status>>, RLWServerError> {
         let (tx, rx) = tokio_mpsc::channel(STREAM_BUFFER_SIZE);
 
-        tokio::spawn(async move {});
+        tokio::spawn(async move {
+            let mut read_idx;
+
+            // Send the job history
+            let output_guard = self.output.lock().await;
+            tx.send(Ok(StreamResponse {
+                output: output_guard.clone(),
+            }))
+            .await
+            .expect("Bad");
+            read_idx = output_guard.len(); // TODO: could be wrong
+            mem::drop(output_guard);
+
+            // While the job is running, first send the output history of the job,
+            // then continue to send new output entries until the process has finished.
+            while matches!(
+                *self.status.lock().await,
+                status_response::ProcessStatus::Running(true)
+            ) {
+                let output = self.output.lock().await;
+                if read_idx < output.len() {
+                    // println!("Read idx = {:?}", output[read_idx]);
+                    let resp = StreamResponse {
+                        output: vec![output[read_idx]],
+                    };
+                    tx.send(Ok(resp)).await.expect("Bad");
+                    read_idx += 1;
+                }
+            }
+
+            // In the event that the process is no longer running but
+            // there is still remaining output entries to stream -
+            // finish streaming.
+            let output = self.output.lock().await;
+            while read_idx < output.len() {
+                println!("Read idx after = {:?}", output[read_idx]);
+                let resp = StreamResponse {
+                    output: vec![output[read_idx]],
+                };
+                tx.send(Ok(resp)).await.expect("Bad");
+                read_idx += 1;
+            }
+        });
 
         Ok(rx)
     }
