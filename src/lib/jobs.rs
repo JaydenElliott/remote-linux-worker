@@ -3,6 +3,7 @@
 
 use tokio::sync::Mutex;
 use tonic::codegen::http::status;
+use tonic::Response;
 
 use crate::errors::RLWServerError;
 use crate::job_processor::*;
@@ -17,7 +18,7 @@ use std::{mem, thread};
 /// underlying process.
 pub struct Job {
     /// Job status
-    pub status: Mutex<Option<status_response::ProcessStatus>>,
+    pub status: Mutex<status_response::ProcessStatus>,
 
     /// Stderr and stdout output from the job.
     pub output: Mutex<Vec<u8>>,
@@ -30,7 +31,7 @@ impl Job {
     /// Construct a new Job
     pub fn new() -> Self {
         Self {
-            status: Mutex::new(None),
+            status: Mutex::new(status_response::ProcessStatus::Running(false)),
             output: Mutex::new(Vec::new()),
             pid: Mutex::new(None),
         }
@@ -63,7 +64,7 @@ impl Job {
 
         // Set status to Running
         let mut status = self.status.lock().await;
-        *status = Some(status_response::ProcessStatus::Running(true));
+        *status = status_response::ProcessStatus::Running(true);
         mem::drop(status); // release guard
 
         // Populate stdout/stderr output
@@ -79,14 +80,14 @@ impl Job {
         // Finished with signal
         if let Some(s) = status.signal() {
             let mut status = self.status.lock().await;
-            *status = Some(status_response::ProcessStatus::Signal(s));
+            *status = status_response::ProcessStatus::Signal(s);
             return Ok(());
         }
 
         // Finished with exit code
         if let Some(c) = status.code() {
             let mut status = self.status.lock().await;
-            *status = Some(status_response::ProcessStatus::ExitCode(c));
+            *status = status_response::ProcessStatus::ExitCode(c);
             return Ok(());
         }
 
@@ -158,7 +159,7 @@ impl Job {
         // then continue to send new output entries until the process has finished.
         while matches!(
             *self.status.lock().await,
-            Some(status_response::ProcessStatus::Running(true))
+            status_response::ProcessStatus::Running(true)
         ) {
             let output = self.output.lock().await;
             if read_idx < output.len() {
@@ -177,6 +178,14 @@ impl Job {
             // GRPC response here
             read_idx += 1;
         }
+    }
+
+    ///
+    pub async fn status(&self) -> Result<Response<StatusResponse>, RLWServerError> {
+        let status = self.status.lock().await.clone();
+        Ok(Response::new(StatusResponse {
+            process_status: Some(status),
+        }))
     }
 }
 
