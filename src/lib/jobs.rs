@@ -3,7 +3,6 @@
 
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::codegen::http::status;
 use tonic::{Response, Status};
 
 use crate::errors::RLWServerError;
@@ -19,6 +18,9 @@ use std::{mem, thread};
 use tokio::sync::mpsc as tokio_mpsc;
 
 type StreamT = ReceiverStream<Result<StreamResponse, Status>>;
+
+// TODO update this
+const STREAM_BUFFER_SIZE: usize = 100;
 
 /// A user job containing information about the
 /// underlying process.
@@ -157,92 +159,20 @@ impl Job {
         Ok(())
     }
 
-    /// TODO: Fix this so it intiially sends entire vector
-    /// then starts sending
+    /// Asynchronously stream the history and live output of the job process.
     pub async fn process_stream(
         self: Arc<Job>,
-        // ) -> Result<Response<ReceiverStream<Result<StreamResponse, Status>>>, Status> {
     ) -> Result<tokio_mpsc::Receiver<Result<StreamResponse, Status>>, RLWServerError> {
-        let (tx, rx) = tokio_mpsc::channel(1000);
-        tokio::spawn(async move {
-            // While the job is running, first send the output history of the job,
-            // then continue to send new output entries until the process has finished.
-            let mut read_idx: usize = 0;
-            while matches!(
-                *self.status.lock().await,
-                status_response::ProcessStatus::Running(true)
-            ) {
-                let output = self.output.lock().await;
-                if read_idx < output.len() {
-                    // println!("Read idx = {:?}", output[read_idx]);
-                    let resp = StreamResponse {
-                        output: vec![output[read_idx]],
-                    };
-                    tx.send(Ok(resp)).await.expect("Bad");
-                    read_idx += 1;
-                }
-            }
+        let (tx, rx) = tokio_mpsc::channel(STREAM_BUFFER_SIZE);
 
-            // In the event that the process is no longer running but
-            // there is still remaining output entries to stream -
-            // finish streaming.
-            let output = self.output.lock().await;
-            while read_idx < output.len() {
-                println!("Read idx after = {:?}", output[read_idx]);
-                let resp = StreamResponse {
-                    output: vec![output[read_idx]],
-                };
-                tx.send(Ok(resp)).await.expect("Bad");
-                read_idx += 1;
-            }
-        });
+        tokio::spawn(async move {});
 
         Ok(rx)
     }
 
-    pub async fn test(&self) -> Result<tokio_mpsc::Receiver<u32>, RLWServerError> {
-        let (tx, mut rx) = tokio_mpsc::channel(1000);
-        tokio::spawn(async move {
-            let resp = StreamResponse { output: vec![3] };
-            tx.send(3).await.expect("Send err");
-        });
+    pub async fn process_stream2(self: Arc<Job>) {}
 
-        Ok(rx)
-    }
-
-    // /// Asynchronously stream the history and live output of the job process.
-    // pub async fn stream_output(
-    //     &self,
-    //     tx: tokio_mpsc::Sender<Result<StreamResponse, _>>,
-    // ) -> Result<(), RLWServerError> {
-    //     // While the job is running, first send the output history of the job,
-    //     // then continue to send new output entries until the process has finished.
-    //     let mut read_idx: usize = 0;
-    //     while matches!(
-    //         *self.status.lock().await,
-    //         status_response::ProcessStatus::Running(true)
-    //     ) {
-    //         let output = self.output.lock().await;
-    //         if read_idx < output.len() {
-    //             // println!("Read idx = {:?}", output[read_idx]);
-    //             tx.send(Ok(output[read_idx])).await;
-    //             read_idx += 1;
-    //         }
-    //     }
-
-    //     // In the event that the process is no longer running but
-    //     // there is still remaining output entries to stream -
-    //     // finish streaming.
-    //     let output = self.output.lock().await;
-    //     while read_idx < output.len() {
-    //         println!("Read idx after = {:?}", output[read_idx]);
-    //         // GRPC response here
-    //         read_idx += 1;
-    //     }
-    //     Ok(())
-    // }
-
-    ///
+    /// TODO
     pub async fn status(&self) -> Result<Response<StatusResponse>, RLWServerError> {
         let status = self.status.lock().await.clone();
         Ok(Response::new(StatusResponse {
@@ -269,7 +199,7 @@ mod tests {
                 .expect("bad in here");
         });
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(5000)).await;
         let arc2 = Arc::clone(&job_arc);
         let task2 = tokio::spawn(async move {
             let mut a = arc2.process_stream().await.expect("error with stream");
@@ -292,13 +222,5 @@ mod tests {
         // let _ = task3.await?;
 
         Ok(())
-    }
-    #[tokio::test(flavor = "multi_thread")]
-    async fn temp() {
-        let job = Job::new();
-        let mut rx = job.test().await.expect("bad");
-        while let Some(i) = rx.recv().await {
-            println!("Got {:?}", i);
-        }
     }
 }
