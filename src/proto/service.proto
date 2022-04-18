@@ -60,11 +60,8 @@ message StartResponse {
 
 // StreamResponse describes StreamResponse
 message StreamResponse {
-  // stdout_output defines the stdout content being streamed to the client
-  bytes stdout_output = 1;
-    
-  // stderr_output defines the stderr content being streamed to the client
-  bytes stderr_output = 2;
+  // output defines the stdout and stderr content being streamed to the client
+  bytes output = 1;
 }
 
 // StatusResponse describes StatusResponse
