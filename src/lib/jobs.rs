@@ -1,22 +1,18 @@
-//! Exposes all the required types and type impls for the
-//! rlw server to run.
-
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
-use tokio_stream::wrappers::ReceiverStream;
-use tonic::{Response, Status};
+//! Exposes the job type and it's implementation to the server
 
 use crate::errors::RLWServerError;
 use crate::job_processor::*;
 use crate::processing::execute_command;
 
-use std::sync::Arc;
-use std::{os::unix::prelude::ExitStatusExt, process::ExitStatus};
+use tokio::sync::{mpsc as tokio_mpsc, Mutex};
+use tokio::task::JoinHandle;
+use tonic::Status;
 
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::{mem, thread};
-
-use tokio::sync::mpsc as tokio_mpsc;
+use std::sync::{
+    mpsc::{self, Receiver, Sender},
+    Arc,
+};
+use std::{mem, os::unix::prelude::ExitStatusExt, process::ExitStatus, thread};
 
 /**
  *
@@ -274,17 +270,8 @@ mod tests {
             stream_handle.await.expect("bad").expect("bad");
         });
 
-        // tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        // let arc3 = Arc::clone(&job_arc);
-        // let arc4 = Arc::clone(&job_arc);
-        // let pid = arc3.pid.lock().await.expect("no pid");
-        // let task3 = tokio::spawn(async move {
-        //     arc4.stop_command(true).await.expect("bad in here");
-        // });
-
         let _ = task1.await?;
         let _ = task2.await?;
-        // let _ = task3.await?;
 
         Ok(())
     }

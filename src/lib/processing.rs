@@ -1,19 +1,18 @@
-//! Module for processing client jobs
-use crate::errors::RLWServerError;
-use std::{
-    io::{BufReader, Read},
-    process::{ExitStatus, Stdio},
-};
+//! Exposes the command processing logic to the job module.
+//! This was left as a separate module for future extensibility.
 
-use std::process::Command;
+use crate::errors::RLWServerError;
+
+use std::io::{BufReader, Read};
+use std::process::{Command, ExitStatus, Stdio};
 use std::sync::mpsc::Sender;
 use std::thread;
 
 // Path to the directory where the processes will be run.
-// TODO: Make this a configurable part of the server
-const PROCESS_PATH: &str = "./tests/test_env";
+// TODO: Make this a configurable part of the server.
+const PROCESS_DIR_PATH: &str = "./tests/test_env";
 
-/// Executes a command using the arguments provided, streaming the output result.
+/// Executes a command using the arguments provided and streams the output result down the provided channel.
 ///
 /// # Arguments
 ///
@@ -30,7 +29,7 @@ pub fn execute_command(
     // Start process
     let mut output = Command::new(command)
         .args(args)
-        .current_dir(PROCESS_PATH)
+        .current_dir(PROCESS_DIR_PATH)
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()?;
@@ -74,8 +73,54 @@ pub fn execute_command(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::mpsc::{self, Receiver};
+
     use super::*;
 
+    /// Tests the execution of a new start command and the resulting output.
+    ///
+    /// Files used: tests/tests_env/test1.sh
     #[test]
-    fn run_script() {}
+    fn test_start_script() -> Result<(), RLWServerError> {
+        let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+        let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
+        let command = "/bin/bash".to_string();
+        let args = vec!["./test1.sh".to_string()];
+
+        // Test command execution
+        let t1 = thread::spawn(move || -> Result<(), RLWServerError> {
+            execute_command(command, args, Some(&tx_pid), &tx_output)?;
+            Ok(())
+        });
+
+        // Test PID received successfully
+        rx_pid.recv()?;
+
+        // Test output received successfully
+        let mut output: Vec<u8> = Vec::new();
+        for byte in rx_output {
+            output.push(byte);
+        }
+
+        // Test no errors in execute_command()
+        t1.join()
+            .map_err(|e| RLWServerError(format!("Error when executing command: {:?}", e)))??;
+
+        // Test output was as expected
+        let str_result = std::str::from_utf8(&output)
+            .map_err(|_| RLWServerError("Failed to map result to utf8 str".to_string()))?;
+        assert_eq!(str_result, "temp file removed\ntemp file created\n");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_incorrect_command() -> Result<(), RLWServerError> {
+        let (tx_output, _): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+        let (tx_pid, _): (Sender<u32>, Receiver<u32>) = mpsc::channel();
+        let command = "asdf".to_string();
+        let args = vec!["-aaa".to_string()];
+        execute_command(command, args, Some(&tx_pid), &tx_output)?;
+        Ok(())
+    }
 }
