@@ -14,16 +14,7 @@ use std::sync::{
 };
 use std::{mem, os::unix::prelude::ExitStatusExt, process::ExitStatus, thread};
 
-/**
- *
- *
- *
- *
- *
- * TODO FIGURE OUT WAY TO UPDATE PID IMMEDIATELY - just unlock mutex from grpc level ez
- */
-
-// TODO update this
+// TODO: update this
 const STREAM_BUFFER_SIZE: usize = 100;
 
 /// A user job containing information about the
@@ -242,12 +233,8 @@ impl Job {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    };
-
     use super::*;
+    use std::sync::Arc;
 
     /// Tests the creation of a new job
     #[tokio::test(flavor = "multi_thread")]
@@ -339,7 +326,10 @@ mod tests {
         let start_ptr = Arc::clone(&job_arc);
         let start_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
             start_ptr
-                .start_command("/bin/bash".to_string(), vec!["./test2.sh".to_string()])
+                .start_command(
+                    "/bin/bash".to_string(),
+                    vec!["../scripts/stream_job.sh".to_string()],
+                )
                 .await
                 .map_err(|_| RLWServerError("Failed to map result to utf8 str".to_string()))?;
             Ok(())
@@ -347,46 +337,22 @@ mod tests {
 
         // Arbitrary time between client starting and stopping job
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        let stop_ptr = Arc::clone(&job_arc);
-        let stop_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
-            let (mut rx, stream_handle) = stop_ptr.stream_job().await?;
+        let stream_ptr = Arc::clone(&job_arc);
+        let stream_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
+            let (mut rx, stream_handle2) = stream_ptr.stream_job().await?;
+
             while let Some(i) = rx.recv().await {
-                println!("i = {:?}", i.expect("bad"));
+                println!(
+                    "i = {:?}",
+                    std::str::from_utf8(i.expect("bad").output.as_slice())
+                );
             }
 
-            stream_handle.await.expect("bad").expect("bad");
+            stream_handle2.await.expect("bad").expect("bad");
             Ok(())
         });
+        let _ = start_handle.await.expect("bad");
+        let _ = stream_handle.await.expect("bad");
         Ok(())
     }
-
-    // #[tokio::test(flavor = "multi_thread")]
-    // async fn run_script() -> Result<(), Box<dyn std::error::Error>> {
-    //     let job = Job::new();
-    //     let job_arc = Arc::new(job);
-
-    //     let arc1 = Arc::clone(&job_arc);
-    //     let task1 = tokio::spawn(async move {
-    //         arc1.start_command("/bin/bash".to_string(), vec!["./test2.sh".to_string()])
-    //             .await
-    //             .expect("bad in here");
-    //     });
-
-    //     // Figure out a way to remove this
-    //     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-    //     let arc2 = Arc::clone(&job_arc);
-    //     let task2 = tokio::spawn(async move {
-    //         let (mut rx, stream_handle) = arc2.stream_job().await.expect("Bad");
-    //         while let Some(i) = rx.recv().await {
-    //             println!("i = {:?}", i.expect("bad"));
-    //         }
-
-    //         stream_handle.await.expect("bad").expect("bad");
-    //     });
-
-    //     let _ = task1.await?;
-    //     let _ = task2.await?;
-
-    //     Ok(())
-    // }
 }
