@@ -1,5 +1,4 @@
 //! Exposes the command processing logic to the job module.
-//! This was left as a separate module for future extensibility.
 
 use crate::errors::RLWServerError;
 
@@ -131,7 +130,6 @@ mod tests {
 
         // Expected failure: "No such file or directory (os error 2)"
         assert!(execute_command(command, args, Some(&tx_pid), &tx_output).is_err());
-
         Ok(())
     }
 }

@@ -31,7 +31,7 @@ pub struct Job {
     /// Job status
     pub status: Mutex<status_response::ProcessStatus>,
 
-    /// Stderr and stdout output from the job.
+    /// Stderr and stdout output from the job
     pub output: Mutex<Vec<u8>>,
 
     /// Job process ID
@@ -100,7 +100,6 @@ impl Job {
             return Ok(());
         }
 
-        // Thread closed job not yet finished
         Err(RLWServerError(
             "Job processing thread closed before it had finished processing".to_string(),
         ))
@@ -161,7 +160,7 @@ impl Job {
     /// Stream the history and all upcoming output from `self.start_command()`.
     ///
     /// # Arguments
-    /// * self: Arc<Job> - Arc of self. Required in order to use self.output in an async tokio thread.
+    /// * `self: Arc<Job>` - Arc of self. Required in order to use self.output in an async tokio thread.
     ///
     /// # Returns
     ///
@@ -247,12 +246,12 @@ mod tests {
     const TESTING_SCRIPTS_DIR: &str = "../scripts/";
 
     /// Tests the starting a new job
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test]
     async fn test_new_job() -> Result<(), RLWServerError> {
         // Setup
         let job = Job::new();
         let command = "echo".to_string();
-        let test_string = "hello_test_create".to_string();
+        let test_string = "hello_test_new_job".to_string();
 
         // Start
         job.start_command(command, vec![test_string.clone()])
@@ -273,7 +272,7 @@ mod tests {
     /// 1. Start the first job with the test script and calculate the size of the resulting output.
     /// 2. Run the job again and after 0.3 seconds send a signal to stop the job.
     /// 3. Assert that the output of the second job is smaller than the first.
-    /// 4. Assert that the final status of the second job is Signal(15)
+    /// 4. Assert that the final status of the second job is Signal(15).
     #[tokio::test(flavor = "multi_thread")]
     async fn test_stop() -> Result<(), RLWServerError> {
         // Setup First Job
@@ -325,12 +324,12 @@ mod tests {
             Ok(())
         });
 
-        start_job2_handle
-            .await
-            .map_err(|e| RLWServerError(format!("{:?}", e)))??;
-        stop_job2_handle
-            .await
-            .map_err(|e| RLWServerError(format!("{:?}", e)))??;
+        start_job2_handle.await.map_err(|e| {
+            RLWServerError(format!("Error joining the start job 2 thread {:?}", e))
+        })??;
+        stop_job2_handle.await.map_err(|e| {
+            RLWServerError(format!("Error joining the stop job 2 thread {:?}", e))
+        })??;
 
         // Get job 1 and job 2's output vector lengths
         let final_arc = Arc::clone(&job2_arc);
