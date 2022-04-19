@@ -4,23 +4,17 @@ use std::sync::mpsc::{self, RecvError, SendError};
 
 use crate::job_processor;
 
-/// TODO: write up for this error
-/// This is general purpose
-/// in production would have different errors for different types etc..
+/// A general purpose error wrapper for the rlw server. This was to avoid using
+/// Box<dyn std::error::Error>> or converting all the errors within the codebase.
 ///
-/// A general error wrapper for the rlw server. This was to avoid
-/// using Box<dyn std::error::Error>> or converting all the errors
-/// within the codebase.
-///
-/// TODO: In the future proper `From` implementations
-/// will need to be written.
+/// TODO: In the future proper `From` implementations will need to be written.
 #[derive(Debug)]
 pub struct RLWServerError(pub String);
 
 // General error implementation
 impl std::error::Error for RLWServerError {}
 
-// Create new error general implementation
+// Create new error from a string
 impl fmt::Display for RLWServerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.0.fmt(f)
