@@ -16,14 +16,13 @@ use std::{mem, os::unix::prelude::ExitStatusExt, process::ExitStatus, thread};
 
 /*
 Tonic requires a bounded tokio mpsc stream to return to the streaming client.
-Need to ensure a large enough buffer size so the sender does not error out.
-It should not be necessary for the size to be 4096 as the client should almost
-immediately be reading from the buffer.
+You need to ensure a large enough buffer size so the sender does not return
+an error. A size of 4096 should not be necessary but is used here as a safe guard.
 
 TODO:
 Run multiple client streaming tests to determine the maximum number of items
-that appeared in the buffer at one time. Set the STREAM_BUFFER_SIZE to be a
-1/2 times larger than this.
+that appeared in the buffer at once. Set the STREAM_BUFFER_SIZE to be
+1.5 times larger than this.
 */
 const STREAM_BUFFER_SIZE: usize = 4096;
 

@@ -1,8 +1,10 @@
+//! Error handling wrappers
+
+use crate::job_processor;
+
 use core::fmt;
 use std::io;
 use std::sync::mpsc::{self, RecvError, SendError};
-
-use crate::job_processor;
 
 /// A general purpose error wrapper for the rlw server. This was to avoid using
 /// Box<dyn std::error::Error>> or converting all the errors within the codebase.
