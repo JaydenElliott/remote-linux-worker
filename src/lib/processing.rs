@@ -12,12 +12,12 @@ use std::thread;
 // TODO: Make this a configurable part of the server.
 const PROCESS_DIR_PATH: &str = "./tests/test_env";
 
-/// Executes a command using the arguments provided and streams the output result down the provided channel.
+/// Executes a command using the arguments provided and sends the output results down the provided channel.
 ///
 /// # Arguments
 ///
-/// * `command`   - Command to execute. Examples: "cargo", "ls", , "/bin/bash"
-/// * `args`      - Arguments to accompany the command. Examples: "--version", "-a", "./file.sh"
+/// * `command`   - Command to execute. Examples: "cargo", "ls", "/bin/bash".
+/// * `args`      - Arguments to accompany the command. Examples: "--version", "-a", "./file.sh".
 /// * `tx_pid`    - The channel producer used to send the process PID of the job started.
 /// * `tx_output` - The channel producer used to stream the command results
 pub fn execute_command(
@@ -48,7 +48,8 @@ pub fn execute_command(
         "Unable to read from stderr stream".to_string(),
     ))?);
 
-    // Concurrently read from stderr and send output down channel
+    // Read from stderr and send the output down the channel
+    // A separate thread is required to sync stderr and stdout
     let tx_output_err = tx_output.clone();
     let thread = thread::spawn(move || -> Result<(), RLWServerError> {
         for byte in stderr_reader.bytes() {
@@ -63,7 +64,10 @@ pub fn execute_command(
     }
 
     if let Err(e) = thread.join() {
-        return Err(RLWServerError(format!("{:?}", e)));
+        return Err(RLWServerError(format!(
+            "Error with output reader thread join: {:?}",
+            e
+        )));
     }
 
     // Return exit code or terminating signal
@@ -73,15 +77,15 @@ pub fn execute_command(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::mpsc::{self, Receiver};
-
     use super::*;
+    use std::sync::mpsc::{self, Receiver};
 
     /// Tests the execution of a new start command and the resulting output.
     ///
     /// Files used: tests/scripts/start_process.sh
     #[test]
-    fn test_start_script() -> Result<(), RLWServerError> {
+    fn test_command_processing() -> Result<(), RLWServerError> {
+        // Setup
         let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
         let command = "/bin/bash".to_string();
@@ -118,12 +122,12 @@ mod tests {
     #[test]
     fn test_incorrect_command() -> Result<(), RLWServerError> {
         // Setup
-        let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
-        let (tx_pid, rx_input): (Sender<u32>, Receiver<u32>) = mpsc::channel();
-        let command = "asdfasdf".to_string();
-        let args = vec!["-aa".to_string()];
+        let (tx_output, _rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+        let (tx_pid, _rx_input): (Sender<u32>, Receiver<u32>) = mpsc::channel();
+        let command = "!i_am_a_bad_command!".to_string();
+        let args = vec!["-abc".to_string()];
 
-        // Expected failure "No Such file or directory (os error 2)
+        // Expected failure: "No such file or directory (os error 2)"
         assert!(execute_command(command, args, Some(&tx_pid), &tx_output).is_err());
 
         Ok(())

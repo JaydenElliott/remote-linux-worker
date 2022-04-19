@@ -9,14 +9,15 @@ use std::sync::mpsc::{self, RecvError, SendError};
 /// A general purpose error wrapper for the rlw server. This was to avoid using
 /// Box<dyn std::error::Error>> or converting all the errors within the codebase.
 ///
-/// TODO: In the future proper `From` implementations will need to be written.
+/// TODO: In the future add different error types to RLWServerError and implement
+/// proper `From` functions.
 #[derive(Debug)]
 pub struct RLWServerError(pub String);
 
 // General error implementation
 impl std::error::Error for RLWServerError {}
 
-// Create new error from a string
+// New error from a string
 impl fmt::Display for RLWServerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.0.fmt(f)
@@ -37,7 +38,7 @@ impl From<RecvError> for RLWServerError {
     }
 }
 
-// PID channel sending errors
+// PID channel errors
 impl From<mpsc::SendError<u32>> for RLWServerError {
     fn from(err: SendError<u32>) -> RLWServerError {
         RLWServerError(err.to_string())

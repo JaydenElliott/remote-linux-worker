@@ -4,15 +4,14 @@ use crate::errors::RLWServerError;
 use crate::job_processor::*;
 use crate::processing::execute_command;
 
-use tokio::sync::{mpsc as tokio_mpsc, Mutex};
-use tokio::task::JoinHandle;
-use tonic::Status;
-
 use std::sync::{
     mpsc::{self, Receiver, Sender},
     Arc,
 };
 use std::{mem, os::unix::prelude::ExitStatusExt, process::ExitStatus, thread};
+use tokio::sync::{mpsc as tokio_mpsc, Mutex};
+use tokio::task::JoinHandle;
+use tonic::Status;
 
 /*
 Tonic requires a bounded tokio mpsc stream to return to the streaming client.
@@ -53,8 +52,8 @@ impl Job {
     ///
     /// # Arguments
     ///
-    /// * `command`      - Command to execute. Examples: "cargo", "ls", "/bin/bash"
-    /// * `args`         - Arguments to accompany the command. Examples: "--version", "-a", "./file.sh"
+    /// * `command`      - Command to execute. Examples: "cargo", "ls", "/bin/bash".
+    /// * `args`         - Arguments to accompany the command. Examples: "--version", "-a", "./file.sh".
     pub async fn start_command(
         &self,
         command: String,
@@ -83,19 +82,18 @@ impl Job {
             self.output.lock().await.push(rec);
         }
 
-        // Process finished
         let status = thread
             .join()
             .map_err(|e| RLWServerError(format!("Error joining on processing thread {:?}", e)))??;
 
-        // Finished with signal
+        // Process finished with signal
         if let Some(s) = status.signal() {
             let mut status = self.status.lock().await;
             *status = status_response::ProcessStatus::Signal(s);
             return Ok(());
         }
 
-        // Finished with exit code
+        // Process finished with exit code
         if let Some(c) = status.code() {
             let mut status = self.status.lock().await;
             *status = status_response::ProcessStatus::ExitCode(c);
@@ -110,15 +108,14 @@ impl Job {
 
     /// Kill the requested process.
     ///
-    /// Sending a kill signal starts a new process; because of this the request is
-    /// handled similarly to `job.start_command()`. The output of the kill process
-    /// will be sent to the same output buffer as the process you are signaling to
-    /// kill. The status of the kill signal process will not be stored.
+    /// The output of the kill process will be sent to the same output buffer
+    /// as the process you are signaling to kill. The status of the kill signal
+    /// process will not be stored.
     ///
     /// # Arguments
     ///
-    /// * `pid`    - the process id of the process to send the kill signal to.
-    /// * `forced` - if true, the signal sent will be SIGKILL, and SIGTERM otherwise
+    /// * `pid`    - the process id of the process to kill.
+    /// * `forced` - if true, the signal sent will be SIGKILL, and SIGTERM otherwise.
     pub async fn stop_command(&self, forced: bool) -> Result<(), RLWServerError> {
         let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
 
@@ -149,13 +146,11 @@ impl Job {
             );
         });
 
-        // If the signal returns any errors/output we want
-        // the client to be able to see this.
+        // Populate stdout/stderr output
         for rec in rx_output {
             self.output.lock().await.push(rec);
         }
 
-        // Process finished
         thread.join().map_err(|e| {
             RLWServerError(format!("Error joining on kill signal thread {:?}", e))
         })??;
@@ -198,12 +193,15 @@ impl Job {
                     .await;
 
                 if let Err(e) = res {
-                    return Err(RLWServerError(format!("{:?}", e)));
+                    return Err(RLWServerError(format!(
+                        "Error sending job history: {:?}",
+                        e
+                    )));
                 }
                 read_idx = output_guard.len();
             }
 
-            // While the job is running, send new output entries
+            // While the job is running, send new output messages
             while matches!(
                 *self.status.lock().await,
                 status_response::ProcessStatus::Running(true)
@@ -223,19 +221,16 @@ impl Job {
             // In the event that the process is no longer running but there is still
             // remaining output entries to stream - finish streaming.
             let output = self.output.lock().await;
-            while read_idx < output.len() {
-                let resp = StreamResponse {
-                    output: vec![output[read_idx]],
-                };
-                tx.send(Ok(resp)).await?;
-                read_idx += 1;
-            }
+            tx.send(Ok(StreamResponse {
+                output: output[read_idx..output.len()].to_vec(),
+            }))
+            .await?;
             Ok(())
         });
         Ok((rx, stream_handle))
     }
 
-    /// Returns the job status object
+    /// Returns the job's status object
     pub async fn status(&self) -> Result<StatusResponse, RLWServerError> {
         let status = self.status.lock().await.clone();
         Ok(StatusResponse {
@@ -249,9 +244,9 @@ mod tests {
     use super::*;
     use std::sync::{atomic::AtomicUsize, Arc};
 
-    /// Tests the creation of a new job
+    /// Tests the starting a new job
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_create() -> Result<(), RLWServerError> {
+    async fn test_new_job() -> Result<(), RLWServerError> {
         // Setup
         let job = Job::new();
         let command = "echo".to_string();
@@ -274,11 +269,11 @@ mod tests {
     ///
     /// The test process is as follows:
     /// 1. Start the first job with the test script and calculate the size of the resulting output.
-    /// 2. Run the job again and after 1/2 a second send a signal to stop the job.
+    /// 2. Run the job again and after 0.3 seconds send a signal to stop the job.
     /// 3. Assert that the output of the second job is smaller than the first.
-    /// 4. Assert that the final status of the job is Signal(15)
+    /// 4. Assert that the final status of the second job is Signal(15)
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_stop1() -> Result<(), RLWServerError> {
+    async fn test_stop() -> Result<(), RLWServerError> {
         // Setup First Job
         let first_job = Job::new();
         let command1 = "/bin/bash".to_string();
@@ -297,22 +292,23 @@ mod tests {
             first_job
                 .start_command(command1, args1)
                 .await
-                .map_err(|_| RLWServerError("Failed to process command".to_string()))?;
+                .map_err(|_| RLWServerError("Failed to process first job".to_string()))?;
             let len = first_job.output.lock().await.len();
             first_output_len.store(len, std::sync::atomic::Ordering::Relaxed);
             Ok(())
         });
+
         first_job_handle
             .await
             .map_err(|e| RLWServerError(format!("{:?}", e)))??;
 
         // Temporarily start second job
-        let start2_arc = Arc::clone(&job2_arc);
-        let start2_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
-            start2_arc
+        let start_job2_arc = Arc::clone(&job2_arc);
+        let start_job2_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
+            start_job2_arc
                 .start_command(command2, args2)
                 .await
-                .map_err(|_| RLWServerError("Failed to process command".to_string()))?;
+                .map_err(|_| RLWServerError("Failed to process second job".to_string()))?;
             Ok(())
         });
 
@@ -320,15 +316,16 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
 
         // Stop second job
-        let stop_j2_arc = Arc::clone(&job2_arc);
-        let stop_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
-            stop_j2_arc.stop_command(false).await?;
+        let stop_job2_arc = Arc::clone(&job2_arc);
+        let stop_job2_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
+            stop_job2_arc.stop_command(false).await?;
             Ok(())
         });
-        start2_handle
+
+        start_job2_handle
             .await
             .map_err(|e| RLWServerError(format!("{:?}", e)))??;
-        stop_handle
+        stop_job2_handle
             .await
             .map_err(|e| RLWServerError(format!("{:?}", e)))??;
 
