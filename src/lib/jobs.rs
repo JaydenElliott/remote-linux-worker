@@ -244,6 +244,8 @@ mod tests {
     use super::*;
     use std::sync::{atomic::AtomicUsize, Arc};
 
+    const TESTING_SCRIPTS_DIR: &str = "../scripts/";
+
     /// Tests the starting a new job
     #[tokio::test(flavor = "multi_thread")]
     async fn test_new_job() -> Result<(), RLWServerError> {
@@ -277,14 +279,15 @@ mod tests {
         // Setup First Job
         let first_job = Job::new();
         let command1 = "/bin/bash".to_string();
-        let args1 = vec!["../scripts/stop_job.sh".to_string()];
+        let args1 = vec![TESTING_SCRIPTS_DIR.to_string() + "stop_job.sh"];
+
         let first_output_len = Arc::new(AtomicUsize::new(0));
 
         // Setup Second Job
         let second_job = Job::new();
         let job2_arc = Arc::new(second_job);
         let command2 = "/bin/bash".to_string();
-        let args2 = vec!["../scripts/stop_job.sh".to_string()];
+        let args2 = vec![TESTING_SCRIPTS_DIR.to_string() + "stop_job.sh"];
         let first_output_len_clone = first_output_len.clone();
 
         // Start and finish first job

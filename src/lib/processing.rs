@@ -80,6 +80,8 @@ mod tests {
     use super::*;
     use std::sync::mpsc::{self, Receiver};
 
+    const TESTING_SCRIPTS_DIR: &str = "../scripts/";
+
     /// Tests the execution of a new start command and the resulting output.
     ///
     /// Files used: tests/scripts/start_process.sh
@@ -89,7 +91,7 @@ mod tests {
         let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
         let command = "/bin/bash".to_string();
-        let args = vec!["../scripts/start_process.sh".to_string()];
+        let args = vec![TESTING_SCRIPTS_DIR.to_string() + "start_process.sh"];
 
         // Test command execution
         let t1 = thread::spawn(move || -> Result<(), RLWServerError> {
