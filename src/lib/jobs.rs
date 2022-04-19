@@ -14,7 +14,17 @@ use std::sync::{
 };
 use std::{mem, os::unix::prelude::ExitStatusExt, process::ExitStatus, thread};
 
-// TODO: update this
+/*
+Tonic requires a bounded tokio mpsc stream to return to the streaming client.
+Need to ensure a large enough buffer size so the sender does not error out.
+It should not be necessary for the size to be 4096 as the client should almost
+immediately be reading from the buffer.
+
+TODO:
+Run multiple client streaming tests to determine the maximum number of items
+that appeared in the buffer at one time. Set the STREAM_BUFFER_SIZE to be a
+1/2 times larger than this.
+*/
 const STREAM_BUFFER_SIZE: usize = 4096;
 
 /// A user job containing information about the
@@ -156,12 +166,12 @@ impl Job {
     /// Stream the history and all upcoming output from `self.start_command()`.
     ///
     /// # Arguments
-    /// * self: Arc<Job> - Arc of self. Required in order to use self.output in async tokio thread.
+    /// * self: Arc<Job> - Arc of self. Required in order to use self.output in an async tokio thread.
     ///
     /// # Returns
     ///
     /// The function returns a result with a tuple containing the following types:
-    /// * StreamResponse Receiver - type to be used by tonic to stream output to the client.
+    /// * StreamResponse Receiver - type to be used by tonic to stream the output to the client.
     /// * JoinHandle              - used to propagate errors up to the main thread in order to be handled.
     pub async fn stream_job(
         self: Arc<Job>,
@@ -172,7 +182,6 @@ impl Job {
         ),
         RLWServerError,
     > {
-        // TODO: update the buffer size - idk what it should be yet
         let (tx, rx) = tokio_mpsc::channel(STREAM_BUFFER_SIZE);
         let stream_handle = tokio::spawn(async move {
             let mut read_idx;
