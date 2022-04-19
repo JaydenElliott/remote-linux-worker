@@ -50,11 +50,11 @@ impl Job {
         }
     }
 
-    /// Start a new process, and populates the job pid, output and status from the process.
+    /// Starts a new process and populates the job pid, output and status from the process.
     ///
     /// # Arguments
     ///
-    /// * `command`      - Command to execute. Examples: "cargo", "ls", , "/bin/bash"
+    /// * `command`      - Command to execute. Examples: "cargo", "ls", "/bin/bash"
     /// * `args`         - Arguments to accompany the command. Examples: "--version", "-a", "./file.sh"
     pub async fn start_command(
         &self,
@@ -150,7 +150,8 @@ impl Job {
             );
         });
 
-        // Populate stdout/stderr output
+        // If the signal returns any errors/output we want
+        // the client to be able to see this.
         for rec in rx_output {
             self.output.lock().await.push(rec);
         }
@@ -184,6 +185,8 @@ impl Job {
     > {
         let (tx, rx) = tokio_mpsc::channel(STREAM_BUFFER_SIZE);
         let stream_handle = tokio::spawn(async move {
+            // An index into job.output is used to determine if any new values need
+            // to be streamed to the client.
             let mut read_idx;
 
             // Send the client the job history
@@ -207,6 +210,8 @@ impl Job {
                 status_response::ProcessStatus::Running(true)
             ) {
                 let output = self.output.lock().await;
+
+                // New output has been added. Send this to the client.
                 if read_idx < output.len() {
                     tx.send(Ok(StreamResponse {
                         output: vec![output[read_idx]],
@@ -276,36 +281,37 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_stop1() -> Result<(), RLWServerError> {
         // Setup First Job
-        let j1 = Job::new();
-        let command_j1 = "/bin/bash".to_string();
-        let args_j1 = vec!["../scripts/stop_job.sh".to_string()];
-        let j1_output_len = Arc::new(AtomicUsize::new(0));
+        let first_job = Job::new();
+        let command1 = "/bin/bash".to_string();
+        let args1 = vec!["../scripts/stop_job.sh".to_string()];
+        let first_output_len = Arc::new(AtomicUsize::new(0));
 
         // Setup Second Job
-        let j2 = Job::new();
-        let j2_arc = Arc::new(j2);
-        let command_j2 = "/bin/bash".to_string();
-        let args_j2 = vec!["../scripts/stop_job.sh".to_string()];
-        let j1_output_len_clone = j1_output_len.clone();
+        let second_job = Job::new();
+        let job2_arc = Arc::new(second_job);
+        let command2 = "/bin/bash".to_string();
+        let args2 = vec!["../scripts/stop_job.sh".to_string()];
+        let first_output_len_clone = first_output_len.clone();
 
         // Start and finish first job
-        let start_j1_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
-            j1.start_command(command_j1, args_j1)
+        let first_job_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
+            first_job
+                .start_command(command1, args1)
                 .await
                 .map_err(|_| RLWServerError("Failed to process command".to_string()))?;
-            let len = j1.output.lock().await.len();
-            j1_output_len.store(len, std::sync::atomic::Ordering::Relaxed);
+            let len = first_job.output.lock().await.len();
+            first_output_len.store(len, std::sync::atomic::Ordering::Relaxed);
             Ok(())
         });
-        start_j1_handle
+        first_job_handle
             .await
             .map_err(|e| RLWServerError(format!("{:?}", e)))??;
 
         // Temporarily start second job
-        let start_j2_arc = Arc::clone(&j2_arc);
-        let start_j2_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
-            start_j2_arc
-                .start_command(command_j2, args_j2)
+        let start2_arc = Arc::clone(&job2_arc);
+        let start2_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
+            start2_arc
+                .start_command(command2, args2)
                 .await
                 .map_err(|_| RLWServerError("Failed to process command".to_string()))?;
             Ok(())
@@ -315,26 +321,26 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
 
         // Stop second job
-        let stop_j2_arc = Arc::clone(&j2_arc);
+        let stop_j2_arc = Arc::clone(&job2_arc);
         let stop_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
             stop_j2_arc.stop_command(false).await?;
             Ok(())
         });
-        start_j2_handle
+        start2_handle
             .await
             .map_err(|e| RLWServerError(format!("{:?}", e)))??;
         stop_handle
             .await
             .map_err(|e| RLWServerError(format!("{:?}", e)))??;
 
-        // Get job1 and job2's output vector length
-        let j2_arc = Arc::clone(&j2_arc);
-        let len_j1 = j1_output_len_clone.load(std::sync::atomic::Ordering::Relaxed);
-        let len_j2 = j2_arc.output.lock().await.len();
+        // Get job 1 and job 2's output vector lengths
+        let final_arc = Arc::clone(&job2_arc);
+        let len_j1 = first_output_len_clone.load(std::sync::atomic::Ordering::Relaxed);
+        let len_j2 = final_arc.output.lock().await.len();
 
         assert!(len_j2 < len_j1);
         assert_eq!(
-            *j2_arc.status.lock().await,
+            *final_arc.status.lock().await,
             status_response::ProcessStatus::Signal(15)
         );
         Ok(())
