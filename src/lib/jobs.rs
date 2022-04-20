@@ -210,7 +210,7 @@ impl Job {
                 // New output has been added. Send this to the client.
                 if read_idx < output.len() {
                     tx.send(Ok(StreamResponse {
-                        output: vec![output[read_idx]],
+                        output: output[read_idx..output.len()].to_vec(),
                     }))
                     .await?;
                     read_idx += 1;
