@@ -201,10 +201,7 @@ impl Job {
             }
 
             // While the job is running, send new output messages
-            while matches!(
-                *self.status.lock().await,
-                status_response::ProcessStatus::Running(true)
-            ) {
+            while let status_response::ProcessStatus::Running(true) = *self.status.lock().await {
                 let output = self.output.lock().await;
 
                 // New output has been added. Send this to the client.
