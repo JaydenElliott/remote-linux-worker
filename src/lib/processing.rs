@@ -39,13 +39,19 @@ pub fn execute_command(
     }
 
     // Setup stream readers
-    let stdout_reader = BufReader::new(output.stdout.take().ok_or(RLWServerError(
-        "Unable to read from stdout stream".to_string(),
-    ))?);
+    let stdout_reader = BufReader::new(
+        output
+            .stdout
+            .take()
+            .ok_or_else(|| RLWServerError("Unable to read from stdout stream".to_string()))?,
+    );
 
-    let stderr_reader = BufReader::new(output.stderr.take().ok_or(RLWServerError(
-        "Unable to read from stderr stream".to_string(),
-    ))?);
+    let stderr_reader = BufReader::new(
+        output
+            .stderr
+            .take()
+            .ok_or_else(|| RLWServerError("Unable to read from stderr stream".to_string()))?,
+    );
 
     // Read from stderr and send the output down the channel
     // A separate thread is required to sync stderr and stdout

@@ -4,15 +4,16 @@ use crate::job_processor::*;
 use crate::processing::execute_command;
 use crate::{errors::RLWServerError, job_processor::status_response::ProcessStatus};
 
-use nix::sys::signal;
-use nix::unistd::Pid;
+use nix::{sys::signal, unistd::Pid};
 use std::sync::{
     mpsc::{self, Receiver, Sender},
     Arc,
 };
-use std::{mem, os::unix::prelude::ExitStatusExt, process::ExitStatus, thread};
-use tokio::sync::{mpsc as tokio_mpsc, Mutex};
-use tokio::task::JoinHandle;
+use std::{os::unix::prelude::ExitStatusExt, process::ExitStatus};
+use tokio::{
+    sync::{mpsc as tokio_mpsc, Mutex},
+    task::JoinHandle,
+};
 use tonic::Status;
 
 /*
