@@ -63,7 +63,7 @@ impl Job {
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
 
         // Process job
-        let thread = thread::spawn(move || -> Result<ExitStatus, RLWServerError> {
+        let thread = tokio::task::spawn_blocking(move || -> Result<ExitStatus, RLWServerError> {
             execute_command(command, args, Some(&tx_pid), &tx_output)
         });
 
@@ -84,19 +84,19 @@ impl Job {
             self.output.lock().await.extend(rec);
         }
 
-        let status = thread
-            .join()
+        let thread_status = thread
+            .await
             .map_err(|e| RLWServerError(format!("Error joining on processing thread {:?}", e)))??;
 
         // Process finished with signal
-        if let Some(s) = status.signal() {
+        if let Some(s) = thread_status.signal() {
             let mut status = self.status.lock().await;
             *status = status_response::ProcessStatus::Signal(s);
             return Ok(());
         }
 
         // Process finished with exit code
-        if let Some(c) = status.code() {
+        if let Some(c) = thread_status.code() {
             let mut status = self.status.lock().await;
             *status = status_response::ProcessStatus::ExitCode(c);
             return Ok(());
