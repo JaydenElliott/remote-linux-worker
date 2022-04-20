@@ -59,7 +59,7 @@ impl Job {
         command: String,
         args: Vec<String>,
     ) -> Result<(), RLWServerError> {
-        let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+        let (tx_output, rx_output): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
 
         // Process job
@@ -79,7 +79,7 @@ impl Job {
 
         // Populate stdout/stderr output
         for rec in rx_output {
-            self.output.lock().await.push(rec);
+            self.output.lock().await.extend(rec);
         }
 
         let status = thread
@@ -116,7 +116,7 @@ impl Job {
     /// * `pid`    - the process id of the process to kill.
     /// * `forced` - if true, the signal sent will be SIGKILL, and SIGTERM otherwise.
     pub async fn stop_command(&self, forced: bool) -> Result<(), RLWServerError> {
-        let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+        let (tx_output, rx_output): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
 
         // Get the PID of the job to kill
         let lock_handle = self.pid.lock().await;
@@ -147,7 +147,7 @@ impl Job {
 
         // Populate stdout/stderr output
         for rec in rx_output {
-            self.output.lock().await.push(rec);
+            self.output.lock().await.extend(rec);
         }
 
         thread.join().map_err(|e| {
