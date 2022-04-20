@@ -12,6 +12,7 @@ path = "src/lib/lib.rs"
 tonic = {version = "0.6.2", features = ["transport", "tls" , "tls-roots"] }
 tokio = { version = "1.17.0", features = ["rt-multi-thread", "macros", "sync"] } 
 prost = "0.9"
+nix = "0.23.1"
 
 [build-dependencies]
 tonic-build = "0.6.0"

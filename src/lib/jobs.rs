@@ -1,9 +1,11 @@
 //! Exposes the job type and it's implementation to the server
 
-use crate::errors::RLWServerError;
 use crate::job_processor::*;
 use crate::processing::execute_command;
+use crate::{errors::RLWServerError, job_processor::status_response::ProcessStatus};
 
+use nix::sys::signal;
+use nix::unistd::Pid;
 use std::sync::{
     mpsc::{self, Receiver, Sender},
     Arc,
@@ -109,54 +111,27 @@ impl Job {
 
     /// Kill the requested process.
     ///
-    /// The output of the kill process will be sent to the same output buffer
-    /// as the process you are signaling to kill. The status of the kill signal
-    /// process will not be stored.
-    ///
     /// # Arguments
     ///
-    /// * `pid`    - the process id of the process to kill.
     /// * `forced` - if true, the signal sent will be SIGKILL, and SIGTERM otherwise.
     pub async fn stop_command(&self, forced: bool) -> Result<(), RLWServerError> {
-        let (tx_output, rx_output): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
-
-        // Get the PID of the job to kill
-        let pid = self
-            .pid
-            .lock()
-            .await
-            .ok_or(RLWServerError(
+        let process_status = self.status.lock().await;
+        if let ProcessStatus::Running(true) = *process_status {
+            // Get the PID of the job to kill
+            let pid = self.pid.lock().await.ok_or(RLWServerError(
                 "There is no running process associated with this job".to_string(),
-            ))?
-            .to_string();
+            ))?;
 
-        // Send kill signal
-        let thread = thread::spawn(move || -> Result<ExitStatus, RLWServerError> {
             if forced {
-                return execute_command(
-                    "kill".to_string(),
-                    vec!["-9".to_string(), pid],
-                    None,
-                    &tx_output,
-                );
+                signal::kill(Pid::from_raw(pid as i32), nix::sys::signal::SIGKILL).map_err(
+                    |e| RLWServerError(format!("Error sending SIGKILL signal: {:?}", e)),
+                )?;
+            } else {
+                signal::kill(Pid::from_raw(pid as i32), nix::sys::signal::SIGTERM).map_err(
+                    |e| RLWServerError(format!("Error sending SIGTERM signal: {:?}", e)),
+                )?;
             }
-            return execute_command(
-                "kill".to_string(),
-                vec!["-15".to_string(), pid],
-                None,
-                &tx_output,
-            );
-        });
-
-        // Populate stdout/stderr output
-        for rec in rx_output {
-            self.output.lock().await.extend(rec);
         }
-
-        thread.join().map_err(|e| {
-            RLWServerError(format!("Error joining on kill signal thread {:?}", e))
-        })??;
-
         Ok(())
     }
 
