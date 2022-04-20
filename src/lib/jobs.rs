@@ -68,14 +68,16 @@ impl Job {
         });
 
         // Set Process ID
-        let mut pid = self.pid.lock().await;
-        *pid = Some(rx_pid.recv()?);
-        mem::drop(pid); // release guard
+        {
+            let mut pid = self.pid.lock().await;
+            *pid = Some(rx_pid.recv()?);
+        }
 
         // Set status to Running
-        let mut status = self.status.lock().await;
-        *status = status_response::ProcessStatus::Running(true);
-        mem::drop(status); // release guard
+        {
+            let mut status = self.status.lock().await;
+            *status = status_response::ProcessStatus::Running(true);
+        }
 
         // Populate stdout/stderr output
         for rec in rx_output {
@@ -119,13 +121,14 @@ impl Job {
         let (tx_output, rx_output): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
 
         // Get the PID of the job to kill
-        let lock_handle = self.pid.lock().await;
-        let pid = lock_handle
+        let pid = self
+            .pid
+            .lock()
+            .await
             .ok_or(RLWServerError(
                 "There is no running process associated with this job".to_string(),
             ))?
             .to_string();
-        mem::drop(lock_handle);
 
         // Send kill signal
         let thread = thread::spawn(move || -> Result<ExitStatus, RLWServerError> {
