@@ -62,7 +62,7 @@ impl Job {
         command: String,
         args: Vec<String>,
     ) -> Result<(), RLWServerError> {
-        let (tx_output, rx_output): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
+        let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
 
         // Process job
@@ -84,7 +84,7 @@ impl Job {
 
         // Populate stdout/stderr output
         for rec in rx_output {
-            self.output.lock().await.extend(rec);
+            self.output.lock().await.push(rec);
         }
 
         let thread_status = thread

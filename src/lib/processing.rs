@@ -2,7 +2,7 @@
 
 use crate::errors::RLWServerError;
 
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufReader, Read};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::mpsc::Sender;
 use std::thread;
@@ -23,7 +23,7 @@ pub fn execute_command(
     command: String,
     args: Vec<String>,
     tx_pid: Option<&Sender<u32>>,
-    tx_output: &Sender<Vec<u8>>,
+    tx_output: &Sender<u8>,
 ) -> Result<ExitStatus, RLWServerError> {
     // Start process
     let mut output = Command::new(command)
@@ -57,15 +57,15 @@ pub fn execute_command(
     // A separate thread is required to sync stderr and stdout
     let tx_output_err = tx_output.clone();
     let thread = thread::spawn(move || -> Result<(), RLWServerError> {
-        for line in stderr_reader.lines() {
-            tx_output_err.send((line? + "\n").into_bytes().to_vec())?;
+        for byte in stderr_reader.bytes() {
+            tx_output_err.send(byte?)?;
         }
         Ok(())
     });
 
     // Read from stdout and send output down channel
-    for line in stdout_reader.lines() {
-        tx_output.send((line? + "\n").into_bytes().to_vec())?;
+    for byte in stdout_reader.bytes() {
+        tx_output.send(byte?)?;
     }
 
     if let Err(e) = thread.join() {
@@ -93,7 +93,7 @@ mod tests {
     #[test]
     fn test_command_processing() -> Result<(), RLWServerError> {
         // Setup
-        let (tx_output, rx_output): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
+        let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
         let command = "/bin/bash".to_string();
         let args = vec![TESTING_SCRIPTS_DIR.to_string() + "start_process.sh"];
@@ -110,7 +110,7 @@ mod tests {
         // Test output received successfully
         let mut output: Vec<u8> = Vec::new();
         for byte in rx_output {
-            output.extend(byte);
+            output.push(byte);
         }
 
         // Test no errors in execute_command()
@@ -129,7 +129,7 @@ mod tests {
     #[test]
     fn test_incorrect_command() -> Result<(), RLWServerError> {
         // Setup
-        let (tx_output, _rx_output): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
+        let (tx_output, _rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
         let (tx_pid, _rx_input): (Sender<u32>, Receiver<u32>) = mpsc::channel();
         let command = "!i_am_a_bad_command!".to_string();
         let args = vec!["-abc".to_string()];
