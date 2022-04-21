@@ -10,10 +10,8 @@ use std::sync::{
     Arc,
 };
 use std::{os::unix::prelude::ExitStatusExt, process::ExitStatus};
-use tokio::{
-    sync::{mpsc as tokio_mpsc, Mutex},
-    task::JoinHandle,
-};
+use synchronoise::SignalEvent;
+use tokio::sync::{mpsc as tokio_mpsc, Mutex};
 use tonic::Status;
 
 /*
@@ -39,6 +37,9 @@ pub struct Job {
 
     /// Job process ID
     pub pid: Mutex<Option<u32>>,
+
+    /// New job output signal to send to a streaming thread
+    pub output_signal: Arc<SignalEvent>,
 }
 
 impl Job {
@@ -48,6 +49,7 @@ impl Job {
             status: Mutex::new(status_response::ProcessStatus::Running(false)),
             output: Mutex::new(Vec::new()),
             pid: Mutex::new(None),
+            output_signal: Arc::new(SignalEvent::auto(false)),
         }
     }
 
@@ -83,8 +85,10 @@ impl Job {
         }
 
         // Populate stdout/stderr output
+        let new_output = self.output_signal.clone();
         for rec in rx_output {
             self.output.lock().await.push(rec);
+            new_output.signal();
         }
 
         let thread_status = thread
@@ -140,69 +144,58 @@ impl Job {
     ///
     /// # Arguments
     /// * `self: Arc<Job>` - Arc of self. Required in order to use self.output in an async tokio thread.
-    ///
-    /// # Returns
-    ///
-    /// The function returns a result with a tuple containing the following types:
-    /// * StreamResponse Receiver - type to be used by tonic to stream the output to the client.
-    /// * JoinHandle              - used to propagate errors up to the main thread in order to be handled.
+    /// * `tx_stream` -    - Channel sender to send stream results to.
     pub async fn stream_job(
         self: Arc<Job>,
-    ) -> Result<
-        (
-            tokio_mpsc::Receiver<Result<StreamResponse, Status>>,
-            JoinHandle<Result<(), RLWServerError>>,
-        ),
-        RLWServerError,
-    > {
-        let (tx, rx) = tokio_mpsc::channel(STREAM_BUFFER_SIZE);
-        let stream_handle = tokio::spawn(async move {
-            // An index into job.output is used to determine if any new values need
-            // to be streamed to the client.
-            let mut read_idx;
+        tx_stream: tokio_mpsc::Sender<Result<StreamResponse, Status>>,
+    ) -> Result<(), RLWServerError> {
+        // Maintain an index into job.output representing
+        // what has been already been streamed.
+        let mut read_idx;
 
-            // Send the client the job history
-            {
-                let output_guard = self.output.lock().await;
-                let res = tx
+        // Send the client the job history
+        {
+            let output_guard = self.output.lock().await;
+            tx_stream
+                .send(Ok(StreamResponse {
+                    output: output_guard.clone(),
+                }))
+                .await?;
+
+            read_idx = output_guard.len();
+        }
+
+        // While the job is running wait until there is a new output signal.
+        // When the signal is received send the new output to the client.
+        let new_output_signal = self.output_signal.clone();
+        while let status_response::ProcessStatus::Running(true) = *self.status.lock().await {
+            new_output_signal.wait();
+
+            // New output has been added. Send this to the client.
+            let output = self.output.lock().await;
+            if read_idx < output.len() {
+                tx_stream
                     .send(Ok(StreamResponse {
-                        output: output_guard.clone(),
-                    }))
-                    .await;
-
-                if let Err(e) = res {
-                    return Err(RLWServerError(format!(
-                        "Error sending job history: {:?}",
-                        e
-                    )));
-                }
-                read_idx = output_guard.len();
-            }
-
-            // While the job is running, send new output messages
-            while let status_response::ProcessStatus::Running(true) = *self.status.lock().await {
-                let output = self.output.lock().await;
-
-                // New output has been added. Send this to the client.
-                if read_idx < output.len() {
-                    tx.send(Ok(StreamResponse {
                         output: output[read_idx..output.len()].to_vec(),
                     }))
                     .await?;
-                    read_idx += 1;
-                }
+                read_idx = output.len();
             }
+        }
 
-            // In the event that the process is no longer running but there is still
-            // remaining output entries to stream - finish streaming.
+        // In the event that the process is no longer running but there is still
+        // remaining output entries to stream - finish streaming.
+        {
             let output = self.output.lock().await;
-            tx.send(Ok(StreamResponse {
-                output: output[read_idx..output.len()].to_vec(),
-            }))
-            .await?;
-            Ok(())
-        });
-        Ok((rx, stream_handle))
+            if read_idx < output.len() {
+                tx_stream
+                    .send(Ok(StreamResponse {
+                        output: output[read_idx..output.len()].to_vec(),
+                    }))
+                    .await?;
+            }
+        }
+        Ok(())
     }
 
     /// Returns the job's status object
@@ -218,6 +211,7 @@ impl Job {
 mod tests {
     use super::*;
     use std::sync::{atomic::AtomicUsize, Arc};
+    use tokio::task::JoinHandle;
 
     const TESTING_SCRIPTS_DIR: &str = "../scripts/";
 
