@@ -11,6 +11,9 @@ use std::thread;
 // TODO: Make this a configurable part of the server.
 const PROCESS_DIR_PATH: &str = "./tests/test_env";
 
+// Upper limit on size of chunks sent down output channel
+const OUTPUT_CHUNK_SIZE_BYTES: usize = 1024;
+
 /// Executes a command using the arguments provided and sends the output results down the provided channel.
 ///
 /// # Arguments
@@ -23,7 +26,7 @@ pub fn execute_command(
     command: String,
     args: Vec<String>,
     tx_pid: Option<&Sender<u32>>,
-    tx_output: &Sender<u8>,
+    tx_output: &Sender<Vec<u8>>,
 ) -> Result<ExitStatus, RLWServerError> {
     // Start process
     let mut output = Command::new(command)
@@ -39,14 +42,14 @@ pub fn execute_command(
     }
 
     // Setup stream readers
-    let stdout_reader = BufReader::new(
+    let mut stdout_reader = BufReader::new(
         output
             .stdout
             .take()
             .ok_or_else(|| RLWServerError("Unable to read from stdout stream".to_string()))?,
     );
 
-    let stderr_reader = BufReader::new(
+    let mut stderr_reader = BufReader::new(
         output
             .stderr
             .take()
@@ -54,18 +57,32 @@ pub fn execute_command(
     );
 
     // Read from stderr and send the output down the channel
-    // A separate thread is required to sync stderr and stdout
     let tx_output_err = tx_output.clone();
     let thread = thread::spawn(move || -> Result<(), RLWServerError> {
-        for byte in stderr_reader.bytes() {
-            tx_output_err.send(byte?)?;
+        let mut buf = [0u8; OUTPUT_CHUNK_SIZE_BYTES];
+        while let Ok(size) = stderr_reader.read(&mut buf) {
+            // Indicates end of stream
+            if size == 0 {
+                break;
+            }
+            tx_output_err.send(buf[0..size].to_vec())?;
+
+            // Reset buffer
+            buf = [0u8; OUTPUT_CHUNK_SIZE_BYTES];
         }
         Ok(())
     });
 
-    // Read from stdout and send output down channel
-    for byte in stdout_reader.bytes() {
-        tx_output.send(byte?)?;
+    let mut buf = [0u8; OUTPUT_CHUNK_SIZE_BYTES];
+    while let Ok(size) = stdout_reader.read(&mut buf) {
+        // Indicates end of stream
+        if size == 0 {
+            break;
+        }
+        tx_output.send(buf[0..size].to_vec())?;
+
+        // Reset buffer
+        buf = [0u8; OUTPUT_CHUNK_SIZE_BYTES];
     }
 
     if let Err(e) = thread.join() {
@@ -93,7 +110,7 @@ mod tests {
     #[test]
     fn test_command_processing() -> Result<(), RLWServerError> {
         // Setup
-        let (tx_output, rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+        let (tx_output, rx_output): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
         let command = "/bin/bash".to_string();
         let args = vec![TESTING_SCRIPTS_DIR.to_string() + "start_process.sh"];
@@ -110,7 +127,7 @@ mod tests {
         // Test output received successfully
         let mut output: Vec<u8> = Vec::new();
         for byte in rx_output {
-            output.push(byte);
+            output.extend(byte);
         }
 
         // Test no errors in execute_command()
@@ -129,7 +146,7 @@ mod tests {
     #[test]
     fn test_incorrect_command() -> Result<(), RLWServerError> {
         // Setup
-        let (tx_output, _rx_output): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+        let (tx_output, _rx_output): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
         let (tx_pid, _rx_input): (Sender<u32>, Receiver<u32>) = mpsc::channel();
         let command = "!i_am_a_bad_command!".to_string();
         let args = vec!["-abc".to_string()];

@@ -25,8 +25,8 @@ impl fmt::Display for RLWServerError {
 }
 
 // Process output channel error
-impl From<mpsc::SendError<u8>> for RLWServerError {
-    fn from(err: SendError<u8>) -> RLWServerError {
+impl From<mpsc::SendError<Vec<u8>>> for RLWServerError {
+    fn from(err: SendError<Vec<u8>>) -> RLWServerError {
         RLWServerError(err.to_string())
     }
 }
