@@ -136,13 +136,19 @@ impl JobProcessorService for JobProcessor {
         // Get user
         let username = "john"; // temp
         let user = self.get_user(username);
-        let uuid = user.new_job(req.command, req.arguments);
+        let uuid = user.start_new_job(req.command, req.arguments);
         Ok(Response::new(StartResponse { uuid }))
     }
 
     /// Stop a running process job
     async fn stop(&self, request: Request<StopRequest>) -> Result<Response<()>, Status> {
-        todo!()
+        // Get user
+        let username = "john"; // temp
+        let user = self.get_user(username);
+        let req = request.into_inner();
+        let job = user.get_job(&req.uuid);
+        job.stop_command(req.forced).await.unwrap();
+        Ok(Response::new(()))
     }
 
     type StreamStream = ReceiverStream<Result<StreamResponse, Status>>;
@@ -165,10 +171,48 @@ impl JobProcessorService for JobProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    const TESTING_SCRIPTS_DIR: &str = "../scripts/";
 
     /// Tests the starting a new job
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_start_request() -> Result<(), RLWServerError> {
+        // Setup
+        let job_processor = JobProcessor::new();
+        let command = "/bin/bash".to_string();
+        let arguments = vec![TESTING_SCRIPTS_DIR.to_string() + "start_request.sh"];
+        let mock_request = Request::new(StartRequest { command, arguments });
+
+        let response = job_processor.start(mock_request).await.unwrap();
+
+        Ok(())
+    }
+
+    /// Tests the starting a new job
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_stop_request() -> Result<(), RLWServerError> {
+        // Setup
+        let job_processor = Arc::new(JobProcessor::new());
+
+        let command = "/bin/bash".to_string();
+        let arguments = vec![TESTING_SCRIPTS_DIR.to_string() + "start_request.sh"];
+        let mock_start_request = Request::new(StartRequest { command, arguments });
+        let j1 = Arc::clone(&job_processor);
+        let uuid = j1
+            .start(mock_start_request)
+            .await
+            .unwrap()
+            .into_inner()
+            .uuid;
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+
+        let j2 = Arc::clone(&job_processor);
+        let mock_stop_request = Request::new(StopRequest {
+            uuid,
+            forced: false,
+        });
+
+        j2.stop(mock_stop_request).await.unwrap();
         Ok(())
     }
 }

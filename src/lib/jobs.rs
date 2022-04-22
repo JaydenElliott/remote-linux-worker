@@ -55,10 +55,13 @@ impl Job {
         let (tx_output, rx_output): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
 
-        // Process job
-        let thread = tokio::task::spawn_blocking(move || -> Result<ExitStatus, RLWServerError> {
+        let thread = std::thread::spawn(move || -> Result<ExitStatus, RLWServerError> {
             execute_command(command, args, Some(&tx_pid), &tx_output)
         });
+        // Process job
+        // let thread = tokio::task::spawn_blocking(move || -> Result<ExitStatus, RLWServerError> {
+        //     execute_command(command, args, Some(&tx_pid), &tx_output)
+        // });
 
         // Set Process ID
         {
@@ -79,9 +82,11 @@ impl Job {
             new_output.signal();
         }
 
-        let thread_status = thread
-            .await
-            .map_err(|e| RLWServerError(format!("Error joining on processing thread {:?}", e)))??;
+        // let thread_status = thread
+        //     .await
+        //     .map_err(|e| RLWServerError(format!("Error joining on processing thread {:?}", e)))??;
+
+        let thread_status = thread.join().unwrap().unwrap();
 
         // Process finished with signal
         if let Some(s) = thread_status.signal() {

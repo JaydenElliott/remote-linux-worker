@@ -31,7 +31,7 @@ impl User {
     /// TODO: check no race condition on starting a job
     /// it returning "one",no thread started, and teh worker
     /// thread finishing
-    pub fn new_job(self: Arc<Self>, command: String, args: Vec<String>) -> String {
+    pub fn start_new_job(self: Arc<Self>, command: String, args: Vec<String>) -> String {
         let uuid = Uuid::new_v4().to_string();
 
         // Add new job to queue
@@ -40,21 +40,14 @@ impl User {
             return uuid;
         }
         // Spawn queue processor thread
-        let handler = self.clone();
         let uuid_t = uuid.clone();
         tokio::spawn(async move {
-            handler.new_queue_processor(&uuid_t).await;
+            while let Some((command, args)) = self.get_new_from_queue() {
+                let job = self.get_new_job(&uuid_t);
+                job.start_command(command, args).await.unwrap(); // TODO: Check this actually waits
+            }
         });
         uuid
-    }
-
-    /// Process that will continue to work through jobs
-    /// on the queue, until it is empty
-    async fn new_queue_processor(&self, uuid: &str) {
-        while let Some((command, args)) = self.get_new_from_queue() {
-            let job = self.get_new_job(uuid);
-            job.start_command(command, args).await.unwrap(); // TODO: Check this actually waits
-        }
     }
 
     /// Add a new command set to the queue
@@ -87,7 +80,7 @@ impl User {
     }
 
     /// Get a pointer to a job from its uuid
-    fn get_job(&self, uuid: &str) -> Arc<Job> {
+    pub fn get_job(&self, uuid: &str) -> Arc<Job> {
         let jobs_arc = &*Arc::clone(&self.jobs);
         let job = Arc::clone(jobs_arc.lock().unwrap().get(uuid).unwrap());
         job
