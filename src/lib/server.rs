@@ -12,6 +12,7 @@ use crate::utils;
 use std::error::Error;
 use std::sync::Mutex;
 use std::{collections::HashMap, sync::Arc};
+use tokio::sync::mpsc as tokio_mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport;
 use tonic::{Request, Response, Status};
@@ -157,19 +158,37 @@ impl JobProcessorService for JobProcessor {
         &self,
         request: tonic::Request<StreamRequest>,
     ) -> Result<tonic::Response<Self::StreamStream>, tonic::Status> {
-        todo!();
+        let username = "john"; // temp
+        let user = self.get_user(username);
+        let req = request.into_inner();
+        let job = user.get_job(&req.uuid);
+        let (tx, rx) = tokio_mpsc::channel(2048); //TODO: update this
+        job.stream_job(tx).await.unwrap();
+        Ok(Response::new(ReceiverStream::new(rx)))
     }
+
     /// Return the status of a previous process job
     async fn status(
         &self,
         request: Request<StatusRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
-        todo!()
+        // Get user
+        let username = "john"; // temp
+        let user = self.get_user(username);
+        let req = request.into_inner();
+        let job = user.get_job(&req.uuid);
+        let status = job.status.lock().await.clone();
+        Ok(Response::new(StatusResponse {
+            process_status: Some(status),
+        }))
     }
 }
 
 #[cfg(test)]
 mod tests {
+
+    use crate::job_processor::status_response::ProcessStatus;
+
     use super::*;
     const TESTING_SCRIPTS_DIR: &str = "../scripts/";
 
@@ -182,12 +201,12 @@ mod tests {
         let arguments = vec![TESTING_SCRIPTS_DIR.to_string() + "start_request.sh"];
         let mock_request = Request::new(StartRequest { command, arguments });
 
-        let response = job_processor.start(mock_request).await.unwrap();
+        job_processor.start(mock_request).await.unwrap();
 
         Ok(())
     }
 
-    /// Tests the starting a new job
+    /// Tests the starting and stopping of a single job
     #[tokio::test(flavor = "multi_thread")]
     async fn test_stop_request() -> Result<(), RLWServerError> {
         // Setup
@@ -196,8 +215,7 @@ mod tests {
         let command = "/bin/bash".to_string();
         let arguments = vec![TESTING_SCRIPTS_DIR.to_string() + "start_request.sh"];
         let mock_start_request = Request::new(StartRequest { command, arguments });
-        let j1 = Arc::clone(&job_processor);
-        let uuid = j1
+        let uuid = job_processor
             .start(mock_start_request)
             .await
             .unwrap()
@@ -206,13 +224,91 @@ mod tests {
 
         tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
 
-        let j2 = Arc::clone(&job_processor);
         let mock_stop_request = Request::new(StopRequest {
             uuid,
             forced: false,
         });
 
-        j2.stop(mock_stop_request).await.unwrap();
+        job_processor.stop(mock_stop_request).await.unwrap();
+
+        // DO A TEST SIMILAR TO BEFORE
+        Ok(())
+    }
+
+    /// Tests the status request of a new job
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_status_request() -> Result<(), RLWServerError> {
+        // Setup
+        let job_processor = Arc::new(JobProcessor::new());
+
+        let command = "/bin/bash".to_string();
+        let arguments = vec![TESTING_SCRIPTS_DIR.to_string() + "start_request.sh"];
+        let mock_start_request = Request::new(StartRequest { command, arguments });
+        let uuid = job_processor
+            .start(mock_start_request)
+            .await
+            .unwrap()
+            .into_inner()
+            .uuid;
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+        let mock_status_request = Request::new(StatusRequest { uuid: uuid.clone() });
+        let status = job_processor
+            .status(mock_status_request)
+            .await
+            .unwrap()
+            .into_inner();
+
+        assert_eq!(status.process_status, Some(ProcessStatus::Running(true)));
+
+        let mock_stop_request = Request::new(StopRequest {
+            uuid: uuid.clone(),
+            forced: false,
+        });
+        job_processor.stop(mock_stop_request).await.unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+        let mock_status_request2 = Request::new(StatusRequest { uuid });
+        let status = job_processor
+            .status(mock_status_request2)
+            .await
+            .unwrap()
+            .into_inner();
+
+        assert_eq!(status.process_status, Some(ProcessStatus::Signal(15)));
+        Ok(())
+    }
+
+    /// Tests the status request of a new job
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_stream_request() -> Result<(), RLWServerError> {
+        // Will need to test this on the client end
+        // Setup
+        let job_processor = Arc::new(JobProcessor::new());
+
+        let command = "/bin/bash".to_string();
+        let arguments = vec![TESTING_SCRIPTS_DIR.to_string() + "stream_job.sh"];
+        let mock_start_request = Request::new(StartRequest { command, arguments });
+        let uuid = job_processor
+            .start(mock_start_request)
+            .await
+            .unwrap()
+            .into_inner()
+            .uuid;
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+        let mock_stream_request = Request::new(StreamRequest { uuid });
+        let mut stream = job_processor
+            .stream(mock_stream_request)
+            .await
+            .unwrap()
+            .into_inner()
+            .into_inner();
+        while let Some(msg) = stream.recv().await {
+            println!("Stream = {:?}", msg);
+        }
         Ok(())
     }
 }
