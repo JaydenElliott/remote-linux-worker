@@ -60,29 +60,33 @@ pub fn execute_command(
     let tx_output_err = tx_output.clone();
     let thread = thread::spawn(move || -> Result<(), RLWServerError> {
         let mut buf = [0u8; OUTPUT_CHUNK_SIZE_BYTES];
-        while let Ok(size) = stderr_reader.read(&mut buf) {
-            // Indicates end of stream
-            if size == 0 {
-                break;
+        loop {
+            match stderr_reader.read(&mut buf) {
+                Ok(size) => {
+                    // End of stream
+                    if size == 0 {
+                        break;
+                    }
+                    tx_output_err.send(buf[0..size].to_vec())?;
+                }
+                Err(e) => return Err(RLWServerError(format!("Stderr read error: {:?}", e))),
             }
-            tx_output_err.send(buf[0..size].to_vec())?;
-
-            // Reset buffer
-            buf = [0u8; OUTPUT_CHUNK_SIZE_BYTES];
         }
         Ok(())
     });
 
     let mut buf = [0u8; OUTPUT_CHUNK_SIZE_BYTES];
-    while let Ok(size) = stdout_reader.read(&mut buf) {
-        // Indicates end of stream
-        if size == 0 {
-            break;
+    loop {
+        match stdout_reader.read(&mut buf) {
+            Ok(size) => {
+                // End of stream
+                if size == 0 {
+                    break;
+                }
+                tx_output.send(buf[0..size].to_vec())?;
+            }
+            Err(e) => return Err(RLWServerError(format!("Stdout read error: {:?}", e))),
         }
-        tx_output.send(buf[0..size].to_vec())?;
-
-        // Reset buffer
-        buf = [0u8; OUTPUT_CHUNK_SIZE_BYTES];
     }
 
     if let Err(e) = thread.join() {
