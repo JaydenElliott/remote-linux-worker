@@ -12,6 +12,7 @@ use std::sync::{
 use std::{os::unix::prelude::ExitStatusExt, process::ExitStatus};
 use synchronoise::SignalEvent;
 use tokio::sync::{mpsc as tokio_mpsc, Mutex};
+use tokio::task::JoinHandle;
 use tonic::Status;
 
 /*
@@ -68,9 +69,10 @@ impl Job {
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
 
         // Process job
-        let thread = tokio::task::spawn_blocking(move || -> Result<ExitStatus, RLWServerError> {
-            execute_command(command, args, Some(&tx_pid), &tx_output)
-        });
+        let thread: JoinHandle<Result<ExitStatus, RLWServerError>> =
+            tokio::spawn(
+                async move { execute_command(command, args, Some(tx_pid), tx_output).await },
+            );
 
         // Set Process ID
         {
@@ -170,7 +172,6 @@ impl Job {
         let new_output_signal = self.output_signal.clone();
         while let status_response::ProcessStatus::Running(true) = *self.status.lock().await {
             new_output_signal.wait();
-
             // New output has been added. Send this to the client.
             let output = self.output.lock().await;
             if read_idx < output.len() {
@@ -216,7 +217,7 @@ mod tests {
     const TESTING_SCRIPTS_DIR: &str = "../scripts/";
 
     /// Tests the starting a new job
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_new_job() -> Result<(), RLWServerError> {
         // Setup
         let job = Job::new();
@@ -261,10 +262,7 @@ mod tests {
 
         // Start and finish first job
         let first_job_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
-            first_job
-                .start_command(command1, args1)
-                .await
-                .map_err(|_| RLWServerError("Failed to process first job".to_string()))?;
+            first_job.start_command(command1, args1).await?;
             let len = first_job.output.lock().await.len();
             first_output_len.store(len, std::sync::atomic::Ordering::Relaxed);
             Ok(())
@@ -297,6 +295,7 @@ mod tests {
         start_job2_handle.await.map_err(|e| {
             RLWServerError(format!("Error joining the start job 2 thread {:?}", e))
         })??;
+
         stop_job2_handle.await.map_err(|e| {
             RLWServerError(format!("Error joining the stop job 2 thread {:?}", e))
         })??;
