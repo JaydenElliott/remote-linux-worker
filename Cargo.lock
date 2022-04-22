@@ -683,12 +683,17 @@ dependencies = [
 name = "rlw"
 version = "0.1.0"
 dependencies = [
+ "log",
  "nix",
  "prost",
+ "rustls",
+ "rustls-pemfile",
  "synchronoise",
  "tokio",
+ "tokio-stream",
  "tonic",
  "tonic-build",
+ "uuid",
 ]
 
 [[package]]
@@ -714,6 +719,15 @@ dependencies = [
  "rustls",
  "schannel",
  "security-framework",
+]
+
+[[package]]
+name = "rustls-pemfile"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ee86d63972a7c661d1536fefe8c3c8407321c3df668891286de28abcd087360"
+dependencies = [
+ "base64",
 ]
 
 [[package]]
@@ -1046,6 +1060,16 @@ name = "untrusted"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
+
+[[package]]
+name = "uuid"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cfcd319456c4d6ea10087ed423473267e1a071f3bc0aa89f80d60997843c6f0"
+dependencies = [
+ "getrandom",
+ "rand",
+]
 
 [[package]]
 name = "want"
