@@ -1,0 +1,19 @@
+[package]
+name = "rlw"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jayden Elliott <jayden.elliott@outlook.com>"]
+
+[lib]
+name = "rlw"
+path = "src/lib/lib.rs"
+
+[dependencies]
+tonic = {version = "0.6.2", features = ["transport", "tls" , "tls-roots"] }
+tokio = { version = "1.17.0", features = ["rt-multi-thread", "macros", "sync"] } 
+prost = "0.9"
+nix = "0.23.1"
+synchronoise = "1.0.0"
+
+[build-dependencies]
+tonic-build = "0.6.0"
