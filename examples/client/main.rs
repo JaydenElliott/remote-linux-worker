@@ -8,7 +8,7 @@ mod utils;
 use crate::job_processor_api::{
     job_processor_service_client::JobProcessorServiceClient, StartRequest,
 };
-use crate::utils::configure_server_tls;
+use crate::utils::configure_tls;
 
 use args::ExtCommand;
 use job_processor_api::{StatusRequest, StopRequest, StreamRequest};
@@ -27,7 +27,7 @@ const RATE_LIMIT_DURATION: u64 = 1;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup client configuration
     let opt = args::Args::from_args();
-    let tls_config = configure_server_tls().await?;
+    let tls_config = configure_tls().await?;
     let channel = Channel::from_shared(opt.address)?
         .timeout(Duration::from_secs(REQUEST_TIMEOUT))
         .connect_timeout(Duration::from_secs(CONNECTION_TIMEOUT))

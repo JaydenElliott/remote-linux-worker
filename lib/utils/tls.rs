@@ -66,7 +66,6 @@ pub fn configure_server_tls(
 
 /// Loads x509 certificates from file
 fn load_certs(path: &str) -> Result<Vec<Certificate>, io::Error> {
-    log::info!("Parsing certificates at path: {}", path);
     let f = fs::File::open(path)?;
     let mut reader = io::BufReader::new(f);
     let certs: Vec<Certificate> = certs(&mut reader)?.into_iter().map(Certificate).collect();
@@ -75,8 +74,6 @@ fn load_certs(path: &str) -> Result<Vec<Certificate>, io::Error> {
 
 /// Loads a private key from file
 fn load_private_key(path: &str) -> Result<PrivateKey, io::Error> {
-    log::info!("Reading private key at path: {}", path);
-
     let keyfile = fs::File::open(path)?;
     let mut reader = io::BufReader::new(keyfile);
     let key_string = rustls_pemfile::read_one(&mut reader)?.ok_or_else(|| {

@@ -1,3 +1,4 @@
+use env_logger;
 use rlw::server::{Server, ServerSettings};
 
 const KEY: &str = "tls/server.key";
@@ -6,6 +7,7 @@ const CLIENT_CERT: &str = "tls/client_ca.pem";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
     let settings = ServerSettings::new(
         "[::1]:50051".to_string(),
         KEY.to_string(),

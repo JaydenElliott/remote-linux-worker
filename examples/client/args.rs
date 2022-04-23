@@ -8,10 +8,6 @@ pub struct Args {
     #[structopt(short = "a", long, default_value = "http://[::1]:50051")]
     pub address: String,
 
-    // The path to the user's certificate
-    #[structopt(short = "c", long)]
-    pub client_certificate_path: String,
-
     // The API method to call (Start, Stop, Status, Stream)
     #[structopt(subcommand)]
     pub api_command: WorkerAPI,

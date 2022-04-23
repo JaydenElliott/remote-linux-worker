@@ -86,6 +86,7 @@ impl Job {
         //     .await
         //     .map_err(|e| RLWServerError(format!("Error joining on processing thread {:?}", e)))??;
 
+        // TODO: FIX!
         let thread_status = thread.join().unwrap().unwrap();
 
         // Process finished with signal
