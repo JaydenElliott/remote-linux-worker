@@ -1,6 +1,6 @@
 //! Provides the exposed gRPC implemented functions to the server.
 
-use crate::rlwp::job::Job;
+use crate::rlwp::Job;
 use crate::server::user::User;
 use crate::utils::errors::{RLWServerError, GENERAL_SERVER_ERR, NO_UUID_JOB};
 use crate::utils::job_processor_api::{job_processor_service_server::JobProcessorService, *};
@@ -137,7 +137,7 @@ impl JobProcessor {
     /// # Arguments
     /// * `username` - username parsed through client certificate
     /// * `uuid`     - job uuid obtained from start request.
-    pub fn get_users_job(&self, username: &str, uuid: &str) -> Result<Arc<Job>, RLWServerError> {
+    fn get_users_job(&self, username: &str, uuid: &str) -> Result<Arc<Job>, RLWServerError> {
         let user = self.get_user(username)?;
         Ok(user.get_job(uuid)?)
     }
@@ -147,7 +147,7 @@ impl JobProcessor {
     ///
     /// # Arguments
     /// * `username` - username parsed through client certificate
-    pub fn get_user(&self, username: &str) -> Result<Arc<User>, RLWServerError> {
+    fn get_user(&self, username: &str) -> Result<Arc<User>, RLWServerError> {
         let table_arc = Arc::clone(&self.user_table);
         let mut table = table_arc
             .lock()

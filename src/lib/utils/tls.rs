@@ -13,6 +13,7 @@ use tonic::transport::ServerTlsConfig;
 
 use crate::utils::errors::RLWServerError;
 
+// TODO: make these configurable
 // Certificates and keys
 const KEY: &str = "tls/server.key";
 const CERT: &str = "tls/server.pem";

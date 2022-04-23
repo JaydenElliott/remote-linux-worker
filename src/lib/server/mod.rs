@@ -4,3 +4,5 @@
 mod api;
 pub mod server;
 mod user;
+
+pub use self::server::{Server, ServerSettings};
