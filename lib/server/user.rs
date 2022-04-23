@@ -53,7 +53,9 @@ impl User {
                         // to next job in queue.
                         log::error!("Start new job error: {:?}", e);
                     }
-                    _ => {}
+                    _ => {
+                        job.output_signal.signal();
+                    }
                 }
             }
         });

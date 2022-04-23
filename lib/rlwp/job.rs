@@ -6,6 +6,7 @@ use crate::utils::job_processor_api::{status_response::ProcessStatus, *};
 
 use log;
 use nix::{sys::signal, unistd::Pid};
+use std::borrow::BorrowMut;
 use std::sync::{
     mpsc::{self, Receiver, Sender},
     Arc,
@@ -38,7 +39,8 @@ impl Job {
             status: Mutex::new(status_response::ProcessStatus::Running(false)),
             output: Mutex::new(Vec::new()),
             pid: Mutex::new(None),
-            output_signal: Arc::new(SignalEvent::auto(false)),
+            // output_signal: Arc::new(SignalEvent::auto(false)),
+            output_signal: Arc::new(SignalEvent::manual(false)),
         }
     }
 
@@ -79,13 +81,11 @@ impl Job {
         }
 
         // Populate stdout/stderr output
-        let new_output = self.output_signal.clone();
+        let new_output = Arc::clone(&self.output_signal);
         for rec in rx_output {
             self.output.lock().await.extend(rec);
-            log::error!("Send output");
             new_output.signal();
         }
-
         // let thread_status = thread
         //     .await
         //     .map_err(|e| RLWServerError(format!("Error joining on processing thread {:?}", e)))??;
@@ -163,14 +163,11 @@ impl Job {
             read_idx = output_guard.len();
         }
 
-        log::error!("streaming");
         // While the job is running wait until there is a new output signal.
         // When the signal is received send the new output to the client.
         let new_output_signal = self.output_signal.clone();
         while let status_response::ProcessStatus::Running(true) = *self.status.lock().await {
-            log::error!("waiting");
             new_output_signal.wait();
-
             // New output has been added. Send this to the client.
             let output = self.output.lock().await;
             if read_idx < output.len() {
@@ -182,6 +179,7 @@ impl Job {
                     .await?;
                 read_idx = output.len();
             }
+            // new_output_signal.reset(); // TODO: HACK FIX THIS
         }
 
         log::error!("ending");
