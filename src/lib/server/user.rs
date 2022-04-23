@@ -1,6 +1,7 @@
 //! Handles all the type implementations for the server
 
-use crate::jobs::Job;
+use crate::rlwp::Job;
+use crate::utils::errors::RLWServerError;
 
 use std::sync::Mutex;
 use std::{
@@ -8,6 +9,7 @@ use std::{
     sync::Arc,
 };
 use uuid::Uuid;
+
 /// Stores a single user's job information.
 pub struct User {
     /// Maps job uuid to Job
@@ -44,7 +46,15 @@ impl User {
         tokio::spawn(async move {
             while let Some((command, args)) = self.get_new_from_queue() {
                 let job = self.get_new_job(&uuid_t);
-                job.start_command(command, args).await.unwrap(); // TODO: Check this actually waits
+                match job.start_command(command, args).await {
+                    Err(e) => {
+                        // Cant return error here as thread is never
+                        // explicitly joined. Log error and move on
+                        // to next job in queue.
+                        log::error!("Start new job error: {:?}", e);
+                    }
+                    _ => {}
+                }
             }
         });
         uuid
@@ -80,20 +90,15 @@ impl User {
     }
 
     /// Get a pointer to a job from its uuid
-    pub fn get_job(&self, uuid: &str) -> Arc<Job> {
+    pub fn get_job(&self, uuid: &str) -> Result<Arc<Job>, RLWServerError> {
         let jobs_arc = &*Arc::clone(&self.jobs);
-        let job = Arc::clone(jobs_arc.lock().unwrap().get(uuid).unwrap());
-        job
+        let job = Arc::clone(
+            jobs_arc
+                .lock()
+                .map_err(|e| RLWServerError(format!("Lock poison error: {:?}", e)))?
+                .get(uuid)
+                .ok_or_else(|| RLWServerError(format!("No job with the specified uuid exists")))?,
+        );
+        Ok(job)
     }
-
-    // /// TODO: Might not need this
-    // /// Returns a job status response if the job exists,
-    // /// else returns None.
-    // pub async fn get_job_status(&self, uuid: &str) -> Option<StatusResponse> {
-    //     let job = self.get_job(uuid);
-    //     let status = job.status.lock().await.clone();
-    //     Some(StatusResponse {
-    //         process_status: Some(status),
-    //     })
-    // }
 }

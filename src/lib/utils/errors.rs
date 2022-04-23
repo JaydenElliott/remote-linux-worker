@@ -1,16 +1,26 @@
 //! Error handling wrappers
 
-use crate::job_processor;
-
+use crate::utils::job_processor_api::StreamResponse;
 use core::fmt;
 use std::io;
 use std::sync::mpsc::{self, RecvError, SendError};
 
-/// A general purpose error wrapper for the rlw server. This was to avoid using
-/// Box<dyn std::error::Error>> or converting all the errors within the codebase.
-///
-/// TODO: In the future add different error types to RLWServerError and implement
-/// proper `From` functions.
+/*
+TODO in the future:
+1: Create  proper error handling struct with an enum of different error types.
+   Will be able to replace the const &str below with the fmt::Display trait.
+
+2: Implement proper From() functions for the error conversions below.
+
+*/
+
+// General Server Error to send to client
+pub const GENERAL_SERVER_ERR: &str = "Server Error";
+
+// No Associated Job
+pub const NO_UUID_JOB: &str = "No job found with the provided uuid";
+
+/// A general purpose error wrapper for the rlw server
 #[derive(Debug)]
 pub struct RLWServerError(pub String);
 
@@ -53,12 +63,15 @@ impl From<io::Error> for RLWServerError {
 }
 
 // Streaming tokio channel error
-impl<T> From<tokio::sync::mpsc::error::SendError<Result<job_processor::StreamResponse, T>>>
-    for RLWServerError
-{
-    fn from(
-        err: tokio::sync::mpsc::error::SendError<Result<job_processor::StreamResponse, T>>,
-    ) -> RLWServerError {
+impl<T> From<tokio::sync::mpsc::error::SendError<Result<StreamResponse, T>>> for RLWServerError {
+    fn from(err: tokio::sync::mpsc::error::SendError<Result<StreamResponse, T>>) -> RLWServerError {
+        RLWServerError(err.to_string())
+    }
+}
+
+// General tonic error
+impl From<tonic::transport::Error> for RLWServerError {
+    fn from(err: tonic::transport::Error) -> RLWServerError {
         RLWServerError(err.to_string())
     }
 }

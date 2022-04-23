@@ -1,9 +1,11 @@
-mod job_processor {
-    tonic::include_proto!("job_processor");
-}
-mod errors;
-pub mod jobs;
-mod processing;
+//! This library exposes two modules - a linux job processor and a gRPC server to process linux jobs
+//!
+//! # Linux Job Processor
+//! A library providing a job object which exposes functions to Start, Stop, Stream and query the Status of a linux process.
+//!
+//! # gRPC Server
+//! A secure gRPC server exposing an API to Start, Stop, Stream and query the Status of linux process jobs.
+//! The server utilizes a strong set of TLS authentication and authorization is managed through certificate usernames.
+pub mod rlwp;
 pub mod server;
-mod server_types;
 mod utils;

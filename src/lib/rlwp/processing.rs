@@ -1,6 +1,6 @@
 //! Exposes the command processing logic to the job module.
 
-use crate::errors::RLWServerError;
+use crate::utils::errors::RLWServerError;
 
 use std::io::{BufReader, Read};
 use std::process::{Command, ExitStatus, Stdio};

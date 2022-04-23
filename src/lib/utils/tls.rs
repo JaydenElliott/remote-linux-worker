@@ -5,11 +5,13 @@ use std::{
 
 use rustls::{
     AllowAnyAuthenticatedClient, Certificate, PrivateKey, ProtocolVersion, RootCertStore,
-    ServerConfig, TLSError,
+    ServerConfig,
 };
 use rustls_pemfile::{certs, Item};
 use std::{fs, io};
 use tonic::transport::ServerTlsConfig;
+
+use crate::utils::errors::RLWServerError;
 
 // Certificates and keys
 const KEY: &str = "tls/server.key";
@@ -26,22 +28,21 @@ const PORT_MAX: u16 = 65535;
 /// is within range.
 ///
 /// Returns a generic socket address in order to integrate with the tonic server
-pub fn ipv6_address_validator(address: &str) -> Result<SocketAddr, Box<dyn std::error::Error>> {
-    let addr =
-        SocketAddrV6::from_str(address).map_err(|e| format!("Invalid Ipv6 address {:?}", e))?;
+pub fn ipv6_address_validator(address: &str) -> Result<SocketAddr, RLWServerError> {
+    let addr = SocketAddrV6::from_str(address)
+        .map_err(|e| RLWServerError(format!("Invalid Ipv6 address {:?}", e)))?;
 
     if addr.port() < PORT_MIN || addr.port() > PORT_MAX {
-        return Err(format!(
+        return Err(RLWServerError(format!(
             "Invalid port number. Must be greater than {} and less than {}",
             PORT_MIN, PORT_MAX
-        )
-        .into());
+        )));
     }
     Ok(SocketAddr::from(addr))
 }
 
 /// Configures the custom TLS settings for the gRPC server
-pub fn configure_server_tls() -> Result<ServerTlsConfig, Box<dyn std::error::Error>> {
+pub fn configure_server_tls() -> Result<ServerTlsConfig, RLWServerError> {
     let suites: Vec<&'static rustls::SupportedCipherSuite> = vec![
         &rustls::ciphersuite::TLS13_AES_256_GCM_SHA384,
         &rustls::ciphersuite::TLS13_AES_128_GCM_SHA256,
@@ -53,7 +54,9 @@ pub fn configure_server_tls() -> Result<ServerTlsConfig, Box<dyn std::error::Err
     let mut client_auth_roots = RootCertStore::empty();
     let root_cert = load_certs(CLIENT_CERT)?;
     for cert in root_cert {
-        client_auth_roots.add(&cert)?;
+        client_auth_roots
+            .add(&cert)
+            .map_err(|e| RLWServerError(format!("Certificate Error: {:?}", e)))?;
     }
 
     let cert_chain = load_certs(CERT)?;
@@ -61,7 +64,9 @@ pub fn configure_server_tls() -> Result<ServerTlsConfig, Box<dyn std::error::Err
 
     // Configure TLS
     let mut config = ServerConfig::new(AllowAnyAuthenticatedClient::new(client_auth_roots));
-    config.set_single_cert(cert_chain, priv_key)?;
+    config
+        .set_single_cert(cert_chain, priv_key)
+        .map_err(|e| RLWServerError(format!("Invalid certificate error: {:?}", e)))?;
     config.ciphersuites = suites;
     config.versions = protocol_version;
 

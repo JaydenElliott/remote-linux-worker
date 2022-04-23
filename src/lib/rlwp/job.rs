@@ -1,8 +1,8 @@
 //! Exposes the job type and it's implementation to the server
 
-use crate::job_processor::*;
-use crate::processing::execute_command;
-use crate::{errors::RLWServerError, job_processor::status_response::ProcessStatus};
+use crate::rlwp::processing::execute_command;
+use crate::utils::errors::RLWServerError;
+use crate::utils::job_processor_api::{status_response::ProcessStatus, *};
 
 use nix::{sys::signal, unistd::Pid};
 use std::sync::{

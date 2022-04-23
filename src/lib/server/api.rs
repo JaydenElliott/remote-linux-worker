@@ -1,126 +1,36 @@
-//! Exposes all the required types and type impls for the
-//! rlw server to run.
+//! Provides the exposed gRPC implemented functions to the server.
 
-use crate::errors::RLWServerError;
-use crate::job_processor::{
-    job_processor_service_server::{JobProcessorService, JobProcessorServiceServer},
-    *,
+use crate::rlwp::job::Job;
+use crate::server::user::User;
+use crate::utils::errors::{RLWServerError, GENERAL_SERVER_ERR, NO_UUID_JOB};
+use crate::utils::job_processor_api::{job_processor_service_server::JobProcessorService, *};
+
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
 };
-use crate::server_types::User;
-use crate::utils;
-
-use std::error::Error;
-use std::sync::Mutex;
-use std::{collections::HashMap, sync::Arc};
 use tokio::sync::mpsc as tokio_mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::transport;
 use tonic::{Request, Response, Status};
 
-/// # RLW Server
-/// A Remote Linux Worker server will listen for
-/// requests to `start`, `stop`, `status` and `stream` process jobs.
-///
-/// This server is a wrapper around the `tonic::transport::Server`.
-///
-/// # Example Usage
-///
-/// ```no-run
-/// use rlw::types::{Server, ServerSettings};
-///
-/// #[tokio::main]
-/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///  let settings = ServerSettings::new("[::1]:50051");
-///  let server = Server::new(settings);
-///  server.run().await?;
-///  Ok(())
-/// }
-/// ```
-pub struct Server {
-    config: ServerSettings,
-}
+/*
+Tonic requires a bounded tokio mpsc stream to return to the streaming client.
+You need to ensure a large enough buffer size so the sender does not return
+an error. A size of 4096 should not be necessary but is used here as a safe guard.
 
-impl Server {
-    // Create a new server instance
-    pub fn new(config: ServerSettings) -> Self {
-        Self { config }
-    }
-
-    /// Start the gRPC server using the configuration provided in `new(config)`
-    /// and handle all incoming requests.
-    ///
-    /// TODO: If I get the time, update the Box<> to be a custom
-    ///       server error type that converts all the other errors it it's type
-    pub async fn run(&self) -> Result<(), Box<dyn Error>> {
-        // Validate and parse the IPv6 address
-        let addr = utils::ipv6_address_validator(&self.config.socket_address)?;
-
-        // // Configure and initialize the server
-        let processor = JobProcessor::new();
-        let svc = JobProcessorServiceServer::new(processor);
-        let tls_config = utils::configure_server_tls()?;
-
-        log::info!(
-            "Linux worker gRPC server listening on: {}",
-            self.config.socket_address
-        );
-        transport::Server::builder()
-            .tls_config(tls_config)?
-            .add_service(svc)
-            .serve(addr)
-            .await?;
-
-        Ok(())
-    }
-}
-
-/// Server Configuration
-pub struct ServerSettings {
-    // TODO: Add extra configuration options:
-    // - Rate limits on requests, for DDOS protection
-    // - Option to pipe logs to file (https://docs.rs/log4rs/1.0.0/log4rs/)
-    // - Option to manually configure TLS:
-    //    - to use TLS v1.2 for an old client implementation
-    //    - to allow different private key encryption formats
-    // - Option to set the host and user CA
-    /// A String containing the IPv6 address + port the user wishes to run the server on
-    pub socket_address: String,
-}
-
-impl ServerSettings {
-    pub fn new(socket_address: String) -> Self {
-        Self { socket_address }
-    }
-}
+TODO:
+Run multiple client streaming tests to determine the maximum number of items
+that appeared in the buffer at once. Set the STREAM_BUFFER_SIZE to be
+1.5 times larger than this.
+*/
+const STREAM_BUFFER_SIZE: usize = 4096;
 
 /// Handles the incoming gRPC job process requests and
 /// stores user data related to these requests
 pub struct JobProcessor {
-    // Maps usernames to users structs.
     // Stores all users and their jobs.
+    // Maps usernames to users structs.
     user_table: Arc<Mutex<HashMap<String, Arc<User>>>>,
-}
-
-impl JobProcessor {
-    /// Creates a new job processor. This should only be done once
-    /// per server instance.
-    pub fn new() -> Self {
-        Self {
-            user_table: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-
-    /// Get a mutable reference to the user's User struct.
-    /// If no user exists with the specified username, a new
-    /// user will be created.
-    pub fn get_user(&self, username: &str) -> Arc<User> {
-        let table_arc = Arc::clone(&self.user_table);
-        let mut table = table_arc.lock().unwrap();
-        if !table.contains_key(username) {
-            table.insert(String::from(username), Arc::new(User::new()));
-        }
-        Arc::clone(table.get(username).unwrap())
-    }
 }
 
 #[tonic::async_trait]
@@ -133,22 +43,36 @@ impl JobProcessorService for JobProcessor {
     ) -> Result<Response<StartResponse>, Status> {
         log::info!("Start Request");
         let req = request.into_inner();
-
-        // Get user
         let username = "john"; // temp
-        let user = self.get_user(username);
+
+        // Get User
+        let user = self.get_user(username).map_err(|e| {
+            log::error!("Start request error: {:?}", e);
+            Status::unknown("Server Error")
+        })?;
+
+        // Start Job
         let uuid = user.start_new_job(req.command, req.arguments);
         Ok(Response::new(StartResponse { uuid }))
     }
 
     /// Stop a running process job
     async fn stop(&self, request: Request<StopRequest>) -> Result<Response<()>, Status> {
-        // Get user
-        let username = "john"; // temp
-        let user = self.get_user(username);
+        log::info!("Stop Request");
         let req = request.into_inner();
-        let job = user.get_job(&req.uuid);
-        job.stop_command(req.forced).await.unwrap();
+        let username = "john"; // temp
+
+        // Get Job
+        let job = self.get_users_job(username, &req.uuid).map_err(|e| {
+            log::error!("Stop Request Error {:?}", e);
+            Status::unknown(NO_UUID_JOB)
+        })?;
+
+        // Stop Job
+        job.stop_command(req.forced).await.map_err(|e| {
+            log::error!("Stop Request Error: {:?}", e);
+            Status::unknown(GENERAL_SERVER_ERR)
+        })?;
         Ok(Response::new(()))
     }
 
@@ -158,12 +82,22 @@ impl JobProcessorService for JobProcessor {
         &self,
         request: tonic::Request<StreamRequest>,
     ) -> Result<tonic::Response<Self::StreamStream>, tonic::Status> {
-        let username = "john"; // temp
-        let user = self.get_user(username);
+        log::info!("Stream Request");
         let req = request.into_inner();
-        let job = user.get_job(&req.uuid);
-        let (tx, rx) = tokio_mpsc::channel(2048); //TODO: update this
-        job.stream_job(tx).await.unwrap();
+        let username = "john"; // temp
+
+        // Get Job
+        let job = self.get_users_job(username, &req.uuid).map_err(|e| {
+            log::error!("Stream Request Error {:?}", e);
+            Status::unknown(NO_UUID_JOB)
+        })?;
+
+        // Stream Job
+        let (tx, rx) = tokio_mpsc::channel(STREAM_BUFFER_SIZE); //TODO: update this
+        job.stream_job(tx).await.map_err(|e| {
+            log::error!("Stream Request Error {:?}", e);
+            Status::unknown(GENERAL_SERVER_ERR)
+        })?;
         Ok(Response::new(ReceiverStream::new(rx)))
     }
 
@@ -172,11 +106,17 @@ impl JobProcessorService for JobProcessor {
         &self,
         request: Request<StatusRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
-        // Get user
-        let username = "john"; // temp
-        let user = self.get_user(username);
+        log::info!("Status Request");
         let req = request.into_inner();
-        let job = user.get_job(&req.uuid);
+        let username = "john"; // temp
+
+        // Get Job
+        let job = self.get_users_job(username, &req.uuid).map_err(|e| {
+            log::error!("Stream Request Error {:?}", e);
+            Status::unknown(NO_UUID_JOB)
+        })?;
+
+        // Get Status
         let status = job.status.lock().await.clone();
         Ok(Response::new(StatusResponse {
             process_status: Some(status),
@@ -184,10 +124,50 @@ impl JobProcessorService for JobProcessor {
     }
 }
 
+impl JobProcessor {
+    /// Creates a new job processor. This should only be done once per server instance.
+    pub fn new() -> Self {
+        Self {
+            user_table: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    /// Useful function that returns a job from a username and uuid.
+    ///
+    /// # Arguments
+    /// * `username` - username parsed through client certificate
+    /// * `uuid`     - job uuid obtained from start request.
+    pub fn get_users_job(&self, username: &str, uuid: &str) -> Result<Arc<Job>, RLWServerError> {
+        let user = self.get_user(username)?;
+        Ok(user.get_job(uuid)?)
+    }
+
+    /// Returns a shared pointer to the user's User struct. If no user exists with
+    /// the specified username, a new user will be created.
+    ///
+    /// # Arguments
+    /// * `username` - username parsed through client certificate
+    pub fn get_user(&self, username: &str) -> Result<Arc<User>, RLWServerError> {
+        let table_arc = Arc::clone(&self.user_table);
+        let mut table = table_arc
+            .lock()
+            .map_err(|e| RLWServerError(format!("Lock poison error: {:?}", e)))?;
+
+        // Insert new user
+        if !table.contains_key(username) {
+            table.insert(String::from(username), Arc::new(User::new()));
+        }
+
+        // Get and return user
+        let user = table
+            .get(username)
+            .ok_or_else(|| RLWServerError("Unable to find user in table".to_string()))?;
+        Ok(Arc::clone(user))
+    }
+}
+
 #[cfg(test)]
 mod tests {
-
-    use crate::job_processor::status_response::ProcessStatus;
 
     use super::*;
     const TESTING_SCRIPTS_DIR: &str = "../scripts/";
@@ -260,7 +240,10 @@ mod tests {
             .unwrap()
             .into_inner();
 
-        assert_eq!(status.process_status, Some(ProcessStatus::Running(true)));
+        assert_eq!(
+            status.process_status,
+            Some(status_response::ProcessStatus::Running(true))
+        );
 
         let mock_stop_request = Request::new(StopRequest {
             uuid: uuid.clone(),
@@ -276,12 +259,16 @@ mod tests {
             .unwrap()
             .into_inner();
 
-        assert_eq!(status.process_status, Some(ProcessStatus::Signal(15)));
+        assert_eq!(
+            status.process_status,
+            Some(status_response::ProcessStatus::Signal(15))
+        );
         Ok(())
     }
 
     /// Tests the status request of a new job
     #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "TODO: Need to Fix"]
     async fn test_stream_request() -> Result<(), RLWServerError> {
         // Will need to test this on the client end
         // Setup
