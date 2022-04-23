@@ -15,35 +15,17 @@ use crate::utils::errors::RLWServerError;
 
 // TODO: make these configurable
 // Certificates and keys
-const KEY: &str = "tls/server.key";
-const CERT: &str = "tls/server.pem";
-const CLIENT_CERT: &str = "tls/client_ca.pem";
 
 // To avoid privileged ports
 const PORT_MIN: u16 = 1024;
 const PORT_MAX: u16 = 65535;
 
-/// Ipv6 address parser and validator
-///
-/// Validates if the address is valid IPv6 and the port
-/// is within range.
-///
-/// Returns a generic socket address in order to integrate with the tonic server
-pub fn ipv6_address_validator(address: &str) -> Result<SocketAddr, RLWServerError> {
-    let addr = SocketAddrV6::from_str(address)
-        .map_err(|e| RLWServerError(format!("Invalid Ipv6 address {:?}", e)))?;
-
-    if addr.port() < PORT_MIN || addr.port() > PORT_MAX {
-        return Err(RLWServerError(format!(
-            "Invalid port number. Must be greater than {} and less than {}",
-            PORT_MIN, PORT_MAX
-        )));
-    }
-    Ok(SocketAddr::from(addr))
-}
-
 /// Configures the custom TLS settings for the gRPC server
-pub fn configure_server_tls() -> Result<ServerTlsConfig, RLWServerError> {
+pub fn configure_server_tls(
+    server_key: &str,
+    server_cert: &str,
+    client_cert: &str,
+) -> Result<ServerTlsConfig, RLWServerError> {
     let suites: Vec<&'static rustls::SupportedCipherSuite> = vec![
         &rustls::ciphersuite::TLS13_AES_256_GCM_SHA384,
         &rustls::ciphersuite::TLS13_AES_128_GCM_SHA256,
@@ -51,17 +33,18 @@ pub fn configure_server_tls() -> Result<ServerTlsConfig, RLWServerError> {
     ];
     let protocol_version = vec![ProtocolVersion::TLSv1_3];
 
-    // Setup certificates and private keys
+    // Setup client authentication
     let mut client_auth_roots = RootCertStore::empty();
-    let root_cert = load_certs(CLIENT_CERT)?;
+    let root_cert = load_certs(client_cert)?;
     for cert in root_cert {
         client_auth_roots
             .add(&cert)
             .map_err(|e| RLWServerError(format!("Certificate Error: {:?}", e)))?;
     }
 
-    let cert_chain = load_certs(CERT)?;
-    let priv_key = load_private_key(KEY)?;
+    // Load certificates and keys
+    let cert_chain = load_certs(server_cert)?;
+    let priv_key = load_private_key(server_key)?;
 
     // Configure TLS
     let mut config = ServerConfig::new(AllowAnyAuthenticatedClient::new(client_auth_roots));
@@ -81,34 +64,29 @@ pub fn configure_server_tls() -> Result<ServerTlsConfig, RLWServerError> {
     Ok(tls_config)
 }
 
-/// Loads all x509 certificates from a file at {path}
+/// Loads x509 certificates from file
 fn load_certs(path: &str) -> Result<Vec<Certificate>, io::Error> {
     log::info!("Parsing certificates at path: {}", path);
-
     let f = fs::File::open(path)?;
     let mut reader = io::BufReader::new(f);
-    let certs: Vec<Certificate> = certs(&mut reader)?
-        .iter()
-        .map(|v| Certificate(v.clone()))
-        .collect();
+    let certs: Vec<Certificate> = certs(&mut reader)?.into_iter().map(Certificate).collect();
     Ok(certs)
 }
 
-/// Loads a RSA, PKCS8 or EC private key from a file at {path}
+/// Loads a private key from file
 fn load_private_key(path: &str) -> Result<PrivateKey, io::Error> {
     log::info!("Reading private key at path: {}", path);
 
-    // Parse key from file
     let keyfile = fs::File::open(path)?;
     let mut reader = io::BufReader::new(keyfile);
     let key_string = rustls_pemfile::read_one(&mut reader)?.ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("No PEM section found in file {}", path),
+            format!("No PEM found in file {}", path),
         )
     })?;
 
-    // Verify it is a supported key type
+    // Verify the key type is supported by rustls
     match key_string {
         Item::RSAKey(k) => Ok(PrivateKey(k)),
         Item::PKCS8Key(k) => Ok(PrivateKey(k)),
@@ -118,4 +96,23 @@ fn load_private_key(path: &str) -> Result<PrivateKey, io::Error> {
             "Key type not supported",
         )),
     }
+}
+
+/// Ipv6 address parser and validator
+///
+/// Validates if the address is valid IPv6 and the port
+/// is within range.
+///
+/// Returns a generic address in order to integrate with the tonic server
+pub fn ipv6_address_validator(address: &str) -> Result<SocketAddr, RLWServerError> {
+    let addr = SocketAddrV6::from_str(address)
+        .map_err(|e| RLWServerError(format!("Invalid Ipv6 address {:?}", e)))?;
+
+    if addr.port() < PORT_MIN || addr.port() > PORT_MAX {
+        return Err(RLWServerError(format!(
+            "Invalid port number. Must be greater than {} and less than {}",
+            PORT_MIN, PORT_MAX
+        )));
+    }
+    Ok(SocketAddr::from(addr))
 }

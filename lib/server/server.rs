@@ -18,11 +18,9 @@ use tonic::transport;
 /// # Example Usage
 ///
 /// ```rust, ignore
-/// use rlw::types::{Server, ServerSettings};
-///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///  let settings = ServerSettings::new("[::1]:50051");
+///  let settings = ServerSettings::new(ADDR, KEY, CERT, CLIENT_CERT);
 ///  let server = Server::new(settings);
 ///  server.run().await?;
 ///  Ok(())
@@ -40,9 +38,6 @@ impl Server {
 
     /// Start the gRPC server using the configuration provided in `new(config)`
     /// and handle all incoming requests.
-    ///
-    /// TODO: If I get the time, update the Box<> to be a custom
-    ///       server error type that converts all the other errors it it's type
     pub async fn run(&self) -> Result<(), RLWServerError> {
         // Validate and parse the IPv6 address
         let addr = ipv6_address_validator(&self.config.address)?;
@@ -50,7 +45,8 @@ impl Server {
         // // Configure and initialize the server
         let processor = JobProcessor::new();
         let svc = JobProcessorServiceServer::new(processor);
-        let tls_config = configure_server_tls()?;
+        let tls_config =
+            configure_server_tls(&self.config.key, &self.config.cert, &self.config.client_ca)?;
 
         log::info!(
             "Linux worker gRPC server listening on: {}",
