@@ -13,8 +13,13 @@ name = "rlw-server"
 path = "server/main.rs"
 
 [dependencies]
+
 tonic = {version = "0.6.2", features = ["transport", "tls" , "tls-roots"] }
-tokio = { version = "1.17.0", features = ["rt-multi-thread", "macros", "sync"] } 
+tokio = { version = "1.17.0", features = ["rt-multi-thread", "macros", "sync", "fs"] } 
+structopt = "0.3.26"
+prost = "0.9"
+rustls-pemfile = "0.3.0"
+tokio-rustls = "0.15.0"
 
 [build-dependencies]
 tonic-build = "0.6.0"
