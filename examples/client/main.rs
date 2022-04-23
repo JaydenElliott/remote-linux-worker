@@ -18,8 +18,8 @@ use tonic::transport::Channel;
 use tonic::Request;
 
 // TODO: move these into a configuration file
-const REQUEST_TIMEOUT: u64 = 5;
-const CONNECTION_TIMEOUT: u64 = 5;
+const REQUEST_TIMEOUT: u64 = 30;
+const CONNECTION_TIMEOUT: u64 = 30;
 const RATE_LIMIT_CONNECTIONS: u64 = 32;
 const RATE_LIMIT_DURATION: u64 = 1;
 
@@ -61,7 +61,7 @@ async fn start_request(
     };
     let request = Request::new(StartRequest { command, arguments });
     let response = client.start(request).await?.into_inner();
-    println!("Job uuid = {}", response.uuid);
+    println!("Job UUID = {}", response.uuid);
     Ok(())
 }
 
@@ -84,7 +84,7 @@ async fn stream_request(
     let request = Request::new(StreamRequest { uuid });
     let mut stream = client.stream(request).await?.into_inner();
     while let Some(response) = stream.message().await? {
-        println!("{:?}", response.output);
+        println!("{:?}", std::str::from_utf8(&response.output));
     }
     Ok(())
 }

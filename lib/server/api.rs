@@ -94,10 +94,13 @@ impl JobProcessorService for JobProcessor {
 
         // Stream Job
         let (tx, rx) = tokio_mpsc::channel(STREAM_BUFFER_SIZE); //TODO: update this
-        job.stream_job(tx).await.map_err(|e| {
-            log::error!("Stream Request Error {:?}", e);
-            Status::unknown(GENERAL_SERVER_ERR)
-        })?;
+
+        tokio::task::spawn(async {
+            if let Err(e) = job.stream_job(tx).await {
+                log::error!("Stream Request Error {:?}", e);
+            }
+        });
+
         Ok(Response::new(ReceiverStream::new(rx)))
     }
 

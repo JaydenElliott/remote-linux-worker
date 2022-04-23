@@ -56,7 +56,6 @@ impl Job {
         let (tx_output, rx_output): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
 
-        // TODO: ! i dont think this thread is spawning fast enough
         let thread = std::thread::spawn(move || -> Result<ExitStatus, RLWServerError> {
             let res = execute_command(command, args, Some(tx_pid), tx_output);
             res
@@ -83,6 +82,7 @@ impl Job {
         let new_output = self.output_signal.clone();
         for rec in rx_output {
             self.output.lock().await.extend(rec);
+            log::error!("Send output");
             new_output.signal();
         }
 
@@ -163,15 +163,18 @@ impl Job {
             read_idx = output_guard.len();
         }
 
+        log::error!("streaming");
         // While the job is running wait until there is a new output signal.
         // When the signal is received send the new output to the client.
         let new_output_signal = self.output_signal.clone();
         while let status_response::ProcessStatus::Running(true) = *self.status.lock().await {
+            log::error!("waiting");
             new_output_signal.wait();
 
             // New output has been added. Send this to the client.
             let output = self.output.lock().await;
             if read_idx < output.len() {
+                log::error!("sending output");
                 tx_stream
                     .send(Ok(StreamResponse {
                         output: output[read_idx..output.len()].to_vec(),
@@ -181,6 +184,7 @@ impl Job {
             }
         }
 
+        log::error!("ending");
         // In the event that the process is no longer running but there is still
         // remaining output entries to stream - finish streaming.
         {
