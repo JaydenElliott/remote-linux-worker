@@ -4,6 +4,7 @@ use crate::rlwp::processing::execute_command;
 use crate::utils::errors::RLWServerError;
 use crate::utils::job_processor_api::{status_response::ProcessStatus, *};
 
+use log;
 use nix::{sys::signal, unistd::Pid};
 use std::sync::{
     mpsc::{self, Receiver, Sender},
@@ -55,9 +56,12 @@ impl Job {
         let (tx_output, rx_output): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
 
+        // TODO: ! i dont think this thread is spawning fast enough
         let thread = std::thread::spawn(move || -> Result<ExitStatus, RLWServerError> {
-            execute_command(command, args, Some(&tx_pid), &tx_output)
+            let res = execute_command(command, args, Some(tx_pid), tx_output);
+            res
         });
+
         // Process job
         // let thread = tokio::task::spawn_blocking(move || -> Result<ExitStatus, RLWServerError> {
         //     execute_command(command, args, Some(&tx_pid), &tx_output)
@@ -305,6 +309,44 @@ mod tests {
             *final_arc.status.lock().await,
             status_response::ProcessStatus::Signal(15)
         );
+        Ok(())
+    }
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_stream() -> Result<(), RLWServerError> {
+        // Setup
+        let job = Job::new();
+        let job_arc = Arc::new(job);
+
+        // Start job
+        let start_ptr = Arc::clone(&job_arc);
+        let start_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
+            start_ptr
+                .start_command(
+                    "/bin/bash".to_string(),
+                    vec!["../scripts/stream_job.sh".to_string()],
+                )
+                .await
+                .map_err(|_| RLWServerError("Failed to map result to utf8 str".to_string()))?;
+            Ok(())
+        });
+
+        // Arbitrary time between client starting and stopping job
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        let stream_ptr = Arc::clone(&job_arc);
+        let (tx, mut rx) = tokio_mpsc::channel(2024);
+        let stream_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
+            stream_ptr.stream_job(tx).await?;
+            Ok(())
+        });
+
+        while let Some(i) = rx.recv().await {
+            println!(
+                "i = {:?}",
+                std::str::from_utf8(i.expect("bad").output.as_slice())
+            );
+        }
+        let _ = start_handle.await.expect("bad");
+        let _ = stream_handle.await.expect("bad");
         Ok(())
     }
 }

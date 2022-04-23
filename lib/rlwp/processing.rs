@@ -2,6 +2,7 @@
 
 use crate::utils::errors::RLWServerError;
 
+use std::env;
 use std::io::{BufReader, Read};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::mpsc::Sender;
@@ -25,8 +26,8 @@ const OUTPUT_CHUNK_SIZE_BYTES: usize = 1024;
 pub fn execute_command(
     command: String,
     args: Vec<String>,
-    tx_pid: Option<&Sender<u32>>,
-    tx_output: &Sender<Vec<u8>>,
+    tx_pid: Option<Sender<u32>>,
+    tx_output: Sender<Vec<u8>>,
 ) -> Result<ExitStatus, RLWServerError> {
     // Start process
     let mut output = Command::new(command)
@@ -121,7 +122,7 @@ mod tests {
 
         // Test command execution
         let t1 = thread::spawn(move || -> Result<(), RLWServerError> {
-            execute_command(command, args, Some(&tx_pid), &tx_output)?;
+            execute_command(command, args, Some(tx_pid), tx_output)?;
             Ok(())
         });
 
@@ -156,7 +157,7 @@ mod tests {
         let args = vec!["-abc".to_string()];
 
         // Expected failure: "No such file or directory (os error 2)"
-        assert!(execute_command(command, args, Some(&tx_pid), &tx_output).is_err());
+        assert!(execute_command(command, args, Some(tx_pid), tx_output).is_err());
         Ok(())
     }
 }
