@@ -1,6 +1,7 @@
 use std::{
     net::{SocketAddr, SocketAddrV6},
     str::FromStr,
+    sync::Arc,
 };
 
 use rustls::{
@@ -10,6 +11,7 @@ use rustls::{
 use rustls_pemfile::{certs, Item};
 use std::{fs, io};
 use tonic::transport::ServerTlsConfig;
+use x509_parser::{extensions::ParsedExtension, prelude::X509Certificate, traits::FromDer};
 
 use crate::utils::errors::RLWServerError;
 
@@ -93,6 +95,27 @@ fn load_private_key(path: &str) -> Result<PrivateKey, io::Error> {
             "Key type not supported",
         )),
     }
+}
+
+/// TODO: Document
+pub fn authorize_user(certs: Option<Arc<Vec<tonic::transport::Certificate>>>) -> Option<String> {
+    let cert = certs.unwrap()[0].clone().into_inner();
+    let (_, cert) = X509Certificate::from_der(&cert).unwrap();
+
+    for ext in cert.extensions() {
+        let parsed_ext = ext.parsed_extension();
+        if let ParsedExtension::SubjectAlternativeName(san) = parsed_ext {
+            for name in &san.general_names {
+                match name {
+                    x509_parser::extensions::GeneralName::RFC822Name(email) => {
+                        return Some(email.to_string())
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Ipv6 address parser and validator

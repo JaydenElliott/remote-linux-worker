@@ -6,7 +6,7 @@ use tonic::transport::{Certificate, ClientTlsConfig, Identity};
 // or environment variables
 const CLIENT_KEY: &str = "tls/client.key";
 const CLIENT_CERT: &str = "tls/client.pem";
-const SERVER_ROOT_CERT: &str = "tls/ca.pem";
+const SERVER_ROOT_CERT: &str = "tls/rootCA.pem";
 
 pub async fn configure_tls() -> Result<ClientTlsConfig, Box<dyn std::error::Error>> {
     let server_ca_pem = tokio::fs::read(SERVER_ROOT_CERT).await?;

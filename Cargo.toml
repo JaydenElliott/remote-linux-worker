@@ -17,6 +17,7 @@ nix = "0.23.1"
 synchronoise = "1.0.0"
 log = "0.4.16"
 rustls-pemfile = "0.3.0"
+x509-parser = "0.13.2"
 rustls = {version = "0.19.1", features = []}
 uuid = {version = "1.0.0", features = ["v4", "fast-rng"]}
 

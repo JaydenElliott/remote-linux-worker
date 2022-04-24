@@ -1,17 +1,17 @@
-
 sleep 10 
+
 echo HELLO
 
-sleep 3
+sleep 1
 
 echo HELLO2
 
-sleep 3
+sleep 1
 
 echo HELLO3
 
-sleep 3
+sleep 1
 
 echo HELLO4
 
-sleep 3
+sleep 1

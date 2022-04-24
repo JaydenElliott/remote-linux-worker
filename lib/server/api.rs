@@ -4,6 +4,7 @@ use crate::rlwp::Job;
 use crate::server::user::User;
 use crate::utils::errors::{RLWServerError, GENERAL_SERVER_ERR, NO_UUID_JOB};
 use crate::utils::job_processor_api::{job_processor_service_server::JobProcessorService, *};
+use crate::utils::tls;
 
 use std::{
     collections::HashMap,
@@ -13,16 +14,10 @@ use tokio::sync::mpsc as tokio_mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
 
-/*
-Tonic requires a bounded tokio mpsc stream to return to the streaming client.
-You need to ensure a large enough buffer size so the sender does not return
-an error. A size of 4096 should not be necessary but is used here as a safe guard.
-
-TODO:
-Run multiple client streaming tests to determine the maximum number of items
-that appeared in the buffer at once. Set the STREAM_BUFFER_SIZE to be
-1.5 times larger than this.
-*/
+// TODO:
+// Run multiple client streaming tests to determine the maximum number of items
+// that appeared in the buffer at once. Set the STREAM_BUFFER_SIZE to be
+// 1.5 times larger than this.
 const STREAM_BUFFER_SIZE: usize = 4096;
 
 /// Handles the incoming gRPC job process requests and
@@ -42,16 +37,17 @@ impl JobProcessorService for JobProcessor {
         request: Request<StartRequest>,
     ) -> Result<Response<StartResponse>, Status> {
         log::info!("Start Request");
-        let req = request.into_inner();
-        let username = "john"; // temp
 
-        // Get User
-        let user = self.get_user(username).map_err(|e| {
+        // Authorize and get user object
+        let user_id = tls::authorize_user(request.peer_certs())
+            .ok_or_else(|| Status::unknown("User is not authorized"))?;
+        let user = self.get_user(&user_id).map_err(|e| {
             log::error!("Start request error: {:?}", e);
             Status::unknown("Server Error")
         })?;
 
         // Start Job
+        let req = request.into_inner();
         let uuid = user.start_new_job(req.command, req.arguments);
         Ok(Response::new(StartResponse { uuid }))
     }
@@ -59,11 +55,17 @@ impl JobProcessorService for JobProcessor {
     /// Stop a running process job
     async fn stop(&self, request: Request<StopRequest>) -> Result<Response<()>, Status> {
         log::info!("Stop Request");
-        let req = request.into_inner();
-        let username = "john"; // temp
+        // Authorize and get user object
+        let user_id = tls::authorize_user(request.peer_certs())
+            .ok_or_else(|| Status::unknown("User is not authorized"))?;
+        // let user = self.get_user(&user_id).map_err(|e| {
+        //     log::error!("Start request error: {:?}", e);
+        //     Status::unknown("Server Error")
+        // })?;
 
         // Get Job
-        let job = self.get_users_job(username, &req.uuid).map_err(|e| {
+        let req = request.into_inner();
+        let job = self.get_users_job(&user_id, &req.uuid).map_err(|e| {
             log::error!("Stop Request Error {:?}", e);
             Status::unknown(NO_UUID_JOB)
         })?;
@@ -83,18 +85,20 @@ impl JobProcessorService for JobProcessor {
         request: tonic::Request<StreamRequest>,
     ) -> Result<tonic::Response<Self::StreamStream>, tonic::Status> {
         log::info!("Stream Request");
-        let req = request.into_inner();
-        let username = "john"; // temp
+
+        // Authorize User
+        let user_id = tls::authorize_user(request.peer_certs())
+            .ok_or_else(|| Status::unknown("User is not authorized"))?;
 
         // Get Job
-        let job = self.get_users_job(username, &req.uuid).map_err(|e| {
+        let req = request.into_inner();
+        let job = self.get_users_job(&user_id, &req.uuid).map_err(|e| {
             log::error!("Stream Request Error {:?}", e);
             Status::unknown(NO_UUID_JOB)
         })?;
 
         // Stream Job
         let (tx, rx) = tokio_mpsc::channel(STREAM_BUFFER_SIZE); //TODO: update this
-
         tokio::task::spawn(async {
             if let Err(e) = job.stream_job(tx).await {
                 log::error!("Stream Request Error {:?}", e);
@@ -110,11 +114,13 @@ impl JobProcessorService for JobProcessor {
         request: Request<StatusRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
         log::info!("Status Request");
-        let req = request.into_inner();
-        let username = "john"; // temp
+        // Authorize and get user object
+        let user_id = tls::authorize_user(request.peer_certs())
+            .ok_or_else(|| Status::unknown("User is not authorized"))?;
 
         // Get Job
-        let job = self.get_users_job(username, &req.uuid).map_err(|e| {
+        let req = request.into_inner();
+        let job = self.get_users_job(&user_id, &req.uuid).map_err(|e| {
             log::error!("Stream Request Error {:?}", e);
             Status::unknown(NO_UUID_JOB)
         })?;
@@ -138,10 +144,10 @@ impl JobProcessor {
     /// Useful function that returns a job from a username and uuid.
     ///
     /// # Arguments
-    /// * `username` - username parsed through client certificate
+    /// * `user_id` - id/email parsed through client certificate
     /// * `uuid`     - job uuid obtained from start request.
-    fn get_users_job(&self, username: &str, uuid: &str) -> Result<Arc<Job>, RLWServerError> {
-        let user = self.get_user(username)?;
+    fn get_users_job(&self, user_id: &str, uuid: &str) -> Result<Arc<Job>, RLWServerError> {
+        let user = self.get_user(user_id)?;
         Ok(user.get_job(uuid)?)
     }
 

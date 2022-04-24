@@ -6,7 +6,6 @@ use crate::utils::job_processor_api::{status_response::ProcessStatus, *};
 
 use log;
 use nix::{sys::signal, unistd::Pid};
-use std::borrow::BorrowMut;
 use std::sync::{
     mpsc::{self, Receiver, Sender},
     Arc,
@@ -63,11 +62,6 @@ impl Job {
             res
         });
 
-        // Process job
-        // let thread = tokio::task::spawn_blocking(move || -> Result<ExitStatus, RLWServerError> {
-        //     execute_command(command, args, Some(&tx_pid), &tx_output)
-        // });
-
         // Set Process ID
         {
             let mut pid = self.pid.lock().await;
@@ -86,12 +80,10 @@ impl Job {
             self.output.lock().await.extend(rec);
             new_output.signal();
         }
-        // let thread_status = thread
-        //     .await
-        //     .map_err(|e| RLWServerError(format!("Error joining on processing thread {:?}", e)))??;
 
-        // TODO: FIX!
-        let thread_status = thread.join().unwrap().unwrap();
+        let thread_status = thread
+            .join()
+            .map_err(|e| RLWServerError(format!("Error joining on processing thread {:?}", e)))??;
 
         // Process finished with signal
         if let Some(s) = thread_status.signal() {
@@ -149,18 +141,20 @@ impl Job {
     ) -> Result<(), RLWServerError> {
         // Maintain an index into job.output representing
         // what has been already been streamed.
-        let mut read_idx;
+        let mut read_idx = 0;
 
         // Send the client the job history
         {
             let output_guard = self.output.lock().await;
-            tx_stream
-                .send(Ok(StreamResponse {
-                    output: output_guard.clone(),
-                }))
-                .await?;
+            if output_guard.len() > 0 {
+                tx_stream
+                    .send(Ok(StreamResponse {
+                        output: output_guard.clone(),
+                    }))
+                    .await?;
 
-            read_idx = output_guard.len();
+                read_idx = output_guard.len();
+            }
         }
 
         // While the job is running wait until there is a new output signal.
@@ -182,7 +176,6 @@ impl Job {
             // new_output_signal.reset(); // TODO: HACK FIX THIS
         }
 
-        log::error!("ending");
         // In the event that the process is no longer running but there is still
         // remaining output entries to stream - finish streaming.
         {
@@ -311,44 +304,6 @@ mod tests {
             *final_arc.status.lock().await,
             status_response::ProcessStatus::Signal(15)
         );
-        Ok(())
-    }
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_stream() -> Result<(), RLWServerError> {
-        // Setup
-        let job = Job::new();
-        let job_arc = Arc::new(job);
-
-        // Start job
-        let start_ptr = Arc::clone(&job_arc);
-        let start_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
-            start_ptr
-                .start_command(
-                    "/bin/bash".to_string(),
-                    vec!["../scripts/stream_job.sh".to_string()],
-                )
-                .await
-                .map_err(|_| RLWServerError("Failed to map result to utf8 str".to_string()))?;
-            Ok(())
-        });
-
-        // Arbitrary time between client starting and stopping job
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        let stream_ptr = Arc::clone(&job_arc);
-        let (tx, mut rx) = tokio_mpsc::channel(2024);
-        let stream_handle: JoinHandle<Result<(), RLWServerError>> = tokio::spawn(async move {
-            stream_ptr.stream_job(tx).await?;
-            Ok(())
-        });
-
-        while let Some(i) = rx.recv().await {
-            println!(
-                "i = {:?}",
-                std::str::from_utf8(i.expect("bad").output.as_slice())
-            );
-        }
-        let _ = start_handle.await.expect("bad");
-        let _ = stream_handle.await.expect("bad");
         Ok(())
     }
 }
