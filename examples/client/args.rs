@@ -4,11 +4,11 @@ use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
 pub struct Args {
-    // The server IPv6 IP + port to connect to.
+    /// The server IPv6 IP + port to connect to.
     #[structopt(short = "a", long, default_value = "http://[::1]:50051")]
     pub address: String,
 
-    // The API method to call (Start, Stop, Status, Stream)
+    /// The API method to call (Start, Stop, Status, Stream)
     #[structopt(subcommand)]
     pub api_command: WorkerAPI,
 }
@@ -17,8 +17,8 @@ pub struct Args {
 pub enum WorkerAPI {
     /// Start a new process job
     Start {
-        // Command + arguments you wish to execute
-        // Example : `cargo run`, `ls -al`, `/bin/bash script.sh`
+        /// Command + arguments you wish to execute
+        /// Example : `cargo run`, `ls -al`, `/bin/bash script.sh`
         #[structopt(subcommand)]
         ext_command: ExtCommand,
     },
@@ -27,7 +27,7 @@ pub enum WorkerAPI {
     Stop {
         /// Process uuid
         uuid: String,
-        // uuid: Test,
+
         /// Forcefully shutdown the process using SIGKILL
         #[structopt(short = "f", long)]
         forced: bool,
@@ -35,6 +35,10 @@ pub enum WorkerAPI {
 
     /// Stream all previous and upcoming stderr and stdout data for a specified job
     Stream {
+        /// Display incoming bytes as strings
+        #[structopt(short = "s", long)]
+        as_string: bool,
+
         /// Process uuid
         uuid: String,
     },

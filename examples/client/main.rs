@@ -38,14 +38,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .tls_config(tls_config)?
         .connect()
         .await?;
-
     let mut client = JobProcessorServiceClient::new(channel);
 
-    // Process requests
+    // Process request
     match opt.api_command {
         args::WorkerAPI::Start { ext_command } => start_request(&mut client, ext_command).await?,
         args::WorkerAPI::Stop { uuid, forced } => stop_request(&mut client, uuid, forced).await?,
-        args::WorkerAPI::Stream { uuid } => stream_request(&mut client, uuid).await?,
+        args::WorkerAPI::Stream { uuid, as_string } => {
+            stream_request(&mut client, uuid, as_string).await?
+        }
         args::WorkerAPI::Status { uuid } => status_request(&mut client, uuid).await?,
     };
     Ok(())
@@ -61,7 +62,7 @@ async fn start_request(
     };
     let request = Request::new(StartRequest { command, arguments });
     let response = client.start(request).await?.into_inner();
-    println!("Job UUID = {}", response.uuid);
+    println!("Job UUID: {}", response.uuid);
     Ok(())
 }
 
@@ -80,11 +81,16 @@ async fn stop_request(
 async fn stream_request(
     client: &mut JobProcessorServiceClient<Channel>,
     uuid: String,
+    as_string: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let request = Request::new(StreamRequest { uuid });
     let mut stream = client.stream(request).await?.into_inner();
     while let Some(response) = stream.message().await? {
-        println!("{:?}", std::str::from_utf8(&response.output));
+        if as_string {
+            println!("{:?}", std::str::from_utf8(&response.output));
+        } else {
+            println!("{:?}", &response.output);
+        }
     }
     Ok(())
 }
