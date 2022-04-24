@@ -1,4 +1,4 @@
-sleep 15 
+sleep 5 
 
 echo OUTPUT1
 

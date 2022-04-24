@@ -62,7 +62,7 @@ async fn start_request(
     };
     let request = Request::new(StartRequest { command, arguments });
     let response = client.start(request).await?.into_inner();
-    println!("Job UUID: {}", response.uuid);
+    println!("{}", response.uuid);
     Ok(())
 }
 
