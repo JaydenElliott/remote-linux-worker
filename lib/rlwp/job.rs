@@ -4,13 +4,15 @@ use crate::rlwp::processing::execute_command;
 use crate::utils::errors::RLWServerError;
 use crate::utils::job_processor_api::{status_response::ProcessStatus, *};
 
-use log;
 use nix::{sys::signal, unistd::Pid};
-use std::sync::{
-    mpsc::{self, Receiver, Sender},
-    Arc,
+use std::{
+    os::unix::prelude::ExitStatusExt,
+    process::ExitStatus,
+    sync::{
+        mpsc::{self, Receiver, Sender},
+        Arc,
+    },
 };
-use std::{os::unix::prelude::ExitStatusExt, process::ExitStatus};
 use synchronoise::SignalEvent;
 use tokio::sync::{mpsc as tokio_mpsc, Mutex};
 use tonic::Status;
@@ -31,18 +33,18 @@ pub struct Job {
     pub output_signal: Arc<SignalEvent>,
 }
 
-impl Job {
-    /// Construct a new Job
-    pub fn new() -> Self {
+impl Default for Job {
+    fn default() -> Self {
         Self {
             status: Mutex::new(status_response::ProcessStatus::Running(false)),
             output: Mutex::new(Vec::new()),
             pid: Mutex::new(None),
-            // output_signal: Arc::new(SignalEvent::auto(false)),
             output_signal: Arc::new(SignalEvent::manual(false)),
         }
     }
+}
 
+impl Job {
     /// Starts a new process and populates the job pid, output and status from the process.
     ///
     /// # Arguments
@@ -58,8 +60,7 @@ impl Job {
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
 
         let thread = std::thread::spawn(move || -> Result<ExitStatus, RLWServerError> {
-            let res = execute_command(command, args, Some(tx_pid), tx_output);
-            res
+            execute_command(command, args, Some(tx_pid), tx_output)
         });
 
         // Set Process ID
@@ -172,7 +173,6 @@ impl Job {
                     .await?;
                 read_idx = output.len();
             }
-            // new_output_signal.reset(); // TODO: HACK FIX THIS
         }
 
         // In the event that the process is no longer running but there is still
@@ -211,7 +211,7 @@ mod tests {
     #[tokio::test]
     async fn test_new_job() -> Result<(), RLWServerError> {
         // Setup
-        let job = Job::new();
+        let job = Job::default();
         let command = "echo".to_string();
         let test_string = "hello_test_new_job".to_string();
 
@@ -238,14 +238,14 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_stop() -> Result<(), RLWServerError> {
         // Setup First Job
-        let first_job = Job::new();
+        let first_job = Job::default();
         let command1 = "/bin/bash".to_string();
         let args1 = vec![TESTING_SCRIPTS_DIR.to_string() + "stop_job.sh"];
 
         let first_output_len = Arc::new(AtomicUsize::new(0));
 
         // Setup Second Job
-        let second_job = Job::new();
+        let second_job = Job::default();
         let job2_arc = Arc::new(second_job);
         let command2 = "/bin/bash".to_string();
         let args2 = vec![TESTING_SCRIPTS_DIR.to_string() + "stop_job.sh"];

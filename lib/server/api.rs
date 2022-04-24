@@ -41,7 +41,7 @@ impl JobProcessorService for JobProcessor {
 
         // Authorize user and get user object
         let user_id = tls::authorize_user(request.peer_certs())
-            .map_err(|e| Status::unknown(e))?
+            .map_err(Status::unknown)?
             .ok_or_else(|| Status::unknown("User is not authorized"))?;
         let user = self.get_user(&user_id).map_err(|e| {
             log::error!("Start request error: {:?}", e);
@@ -59,7 +59,7 @@ impl JobProcessorService for JobProcessor {
         log::info!("Stop Request");
         // Authorize user
         let user_id = tls::authorize_user(request.peer_certs())
-            .map_err(|e| Status::unknown(e))?
+            .map_err(Status::unknown)?
             .ok_or_else(|| Status::unknown("User is not authorized"))?;
 
         // Get Job
@@ -87,7 +87,7 @@ impl JobProcessorService for JobProcessor {
 
         // Authorize User
         let user_id = tls::authorize_user(request.peer_certs())
-            .map_err(|e| Status::unknown(e))?
+            .map_err(Status::unknown)?
             .ok_or_else(|| Status::unknown("User is not authorized"))?;
 
         // Get Job
@@ -117,7 +117,7 @@ impl JobProcessorService for JobProcessor {
         log::info!("Status Request");
         // Authorize user
         let user_id = tls::authorize_user(request.peer_certs())
-            .map_err(|e| Status::unknown(e))?
+            .map_err(Status::unknown)?
             .ok_or_else(|| Status::unknown("User is not authorized"))?;
 
         // Get job
@@ -148,6 +148,7 @@ impl JobProcessor {
     /// # Arguments
     /// * `user_id` - id/email parsed through client certificate
     /// * `uuid`     - job uuid obtained from start request.
+    #[allow(clippy::needless_question_mark)]
     fn get_users_job(&self, user_id: &str, uuid: &str) -> Result<Arc<Job>, RLWServerError> {
         let user = self.get_user(user_id)?;
         Ok(user.get_job(uuid)?)

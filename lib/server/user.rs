@@ -18,6 +18,7 @@ pub struct User {
     /// A queue storing new job requests.
     /// Each job request contains a new Command and
     /// a list of arguments to accompany the command.
+    #[allow(clippy::type_complexity)]
     job_queue: Arc<Mutex<VecDeque<(String, Vec<String>)>>>,
 }
 
@@ -85,7 +86,7 @@ impl User {
     fn get_new_job(&self, uuid: &str) -> Arc<Job> {
         let jobs_arc = Arc::clone(&self.jobs);
         let mut jobs = jobs_arc.lock().unwrap();
-        jobs.insert(uuid.to_string(), Arc::new(Job::new()));
+        jobs.insert(uuid.to_string(), Arc::new(Job::default()));
         let job = Arc::clone(jobs.get(uuid).unwrap());
         job
     }
@@ -98,7 +99,9 @@ impl User {
                 .lock()
                 .map_err(|e| RLWServerError(format!("Lock poison error: {:?}", e)))?
                 .get(uuid)
-                .ok_or_else(|| RLWServerError(format!("No job with the specified uuid exists")))?,
+                .ok_or_else(|| {
+                    RLWServerError("No job with the specified uuid exists".to_string())
+                })?,
         );
         Ok(job)
     }

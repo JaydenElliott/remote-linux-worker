@@ -17,7 +17,6 @@ use crate::utils::errors::RLWServerError;
 
 // To avoid privileged ports
 const PORT_MIN: u16 = 1024;
-const PORT_MAX: u16 = 65535;
 
 /// Configures the custom TLS settings for the gRPC server
 pub fn configure_server_tls(
@@ -147,10 +146,10 @@ pub fn ipv6_address_validator(address: &str) -> Result<SocketAddr, RLWServerErro
     let addr = SocketAddrV6::from_str(address)
         .map_err(|e| RLWServerError(format!("Invalid Ipv6 address {:?}", e)))?;
 
-    if addr.port() < PORT_MIN || addr.port() > PORT_MAX {
+    if addr.port() < PORT_MIN {
         return Err(RLWServerError(format!(
-            "Invalid port number. Must be greater than {} and less than {}",
-            PORT_MIN, PORT_MAX
+            "Invalid port number. Must be greater than {}",
+            PORT_MIN
         )));
     }
     Ok(SocketAddr::from(addr))
