@@ -1,5 +1,5 @@
 # RLW - Remote Linux Worker
-A lightweight remote linux process execution server-side library and client CLI.
+A lightweight remote linux process execution server-side library.
 
 RLW exposes two sub-libraries:
 1. `rlwp` - Remote Linux Worker Processor: an interface that allows users to start, stop, get the status of and stream linux process jobs.
@@ -13,17 +13,18 @@ RLW exposes two sub-libraries:
 
 ## Examples
 
-An example client/server implementation can be found in `remote-linux-worker/examples/`. Ensure all the below commands are run from this directory.
+An example client/server implementation can be found in `remote-linux-worker/examples`. Ensure all the below commands are run from this directory.
 
 ### Server
 
-To kickstart the server run:
+To start the server run:
 ```
 cargo run --bin rlw-server
 ```
 
 Logging is used so ensure `RUST_LOG=info` to see the full log output.
 
+<br>
 
 ### Client
 
@@ -33,9 +34,6 @@ cargo run --bin rlw-client --help
 
 cargo run rlw-client {subcommand} --help
  ``` 
-
-
-<br>
 
 #### Start Job
 
@@ -49,7 +47,6 @@ Run a command:
 ```
 cargo run --bin rlw-client start echo hello world
 ```
-<br>
 
 #### Stop Job
 Start job will return a job UUID. It is the client's responsible to store this for future commands.
@@ -63,10 +60,9 @@ A job can be forcefully closed with:
 cargo run --bin rlw-client stop -f ${UUID} 
 ```
 
-<br>
 
 #### Stream Job
-To obtain a history of the job output and a live stream of the job output run:
+To obtain the history and live output of a job run:
 
 ```
 cargo run --bin rlw-client stream ${UUID} 
@@ -78,9 +74,8 @@ If the output is valid utf-8, it can be returned as a string with:
 cargo run --bin rlw-client stream -s ${UUID} 
 ```
 
-Any non-utf-8 bytes will display an error but the stream will not be stopped.
+Any non-utf-8 bytes will display an error and the stream will continue.
 
-<br>
 
 #### Job Status 
 To get the job status (`Running`, `Exited with Code` or `Exited with Signal`) run:
@@ -88,11 +83,13 @@ To get the job status (`Running`, `Exited with Code` or `Exited with Signal`) ru
 ```
 cargo run --bin rlw-client status ${UUID} 
 ```
-## Unit tests
 
-Run the library unit tests
+<br>
+
+## Development
+
+To run the library unit tests ensure you are in the projects top-most directory `..../remote-linux-worker` and run:
 ```
-cd remote-linux-worker
 cargo test --lib
 ```
 
