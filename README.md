@@ -1,5 +1,5 @@
 # RLW - Remote Linux Worker
-A remote linux process execution server-side library and gRPC server.
+A remote linux process execution library and gRPC server.
 
 RLW exposes two sub-libraries:
 1. `rlwp` - Remote Linux Worker Processor: an interface that allows users to start, stop, stream and get the status of linux process jobs.
@@ -21,7 +21,8 @@ cargo test --lib
 An example client/server implementation can be found in `remote-linux-worker/examples`. Ensure all the below commands are run from the `examples/` directory.
 
 ### TL;DR
-Firstly ensure the server is running, then use the below command to start a job and pipe the UUID to the stream command to get the output:
+Start the server with `cargo run --bin rlw-server`.
+In a separate window / tab use the below command to start a job and pipe the UUID to the stream command to get the output:
 ```
 cargo run --bin rlw-client start /bin/bash ./stream_job.sh | xargs -I {} cargo run --bin rlw-client stream -s "{}"
 ```
@@ -38,7 +39,7 @@ Logging is used, so ensure `RUST_LOG=info` to see the full log output.
 
 ### Client
 
-The following are a set of examples commands used to interact with the server. To see the full CLI specification first build the examples then run.
+The following are a set of examples commands used to interact with the server. To see the full CLI specification first build the examples, then run.
  ```
 cargo run --bin rlw-client --help
 
@@ -64,12 +65,12 @@ cargo run --bin rlw-client start echo hello world
 Start job will return a job UUID. It is the client's responsibility to store this for future commands.
 
 ```
-cargo run --bin rlw-client stop ${UUID} 
+cargo run --bin rlw-client stop {UUID} 
 ```
 
 A job can be forcefully closed with:
 ```
-cargo run --bin rlw-client stop -f ${UUID} 
+cargo run --bin rlw-client stop -f {UUID} 
 ```
 
 
@@ -77,21 +78,21 @@ cargo run --bin rlw-client stop -f ${UUID}
 To obtain the history and live output of a job run:
 
 ```
-cargo run --bin rlw-client stream ${UUID} 
+cargo run --bin rlw-client stream {UUID} 
 ```
 
 If the output is valid utf-8, it can be returned as a string with:
 
 ```
-cargo run --bin rlw-client stream -s ${UUID} 
+cargo run --bin rlw-client stream -s {UUID} 
 ```
 
-Any non-utf-8 bytes will display an error and the stream will continue.
+Note: If this flag is set, any non-utf-8 bytes will display an error and the stream will continue.
 
 
 #### Job Status 
 To get the job status (`Running`, `Exited with Code` or `Exited with Signal`) run:
 
 ```
-cargo run --bin rlw-client status ${UUID} 
+cargo run --bin rlw-client status {UUID} 
 ```
