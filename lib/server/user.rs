@@ -48,9 +48,8 @@ impl User {
                 let job = self.get_new_job(&uuid_t);
                 match job.start_command(command, args).await {
                     Err(e) => {
-                        // Cant return error here as thread is never
-                        // explicitly joined. Log error and move on
-                        // to next job in queue.
+                        // Cant return error here as thread is never explicitly joined.
+                        // Log error and move on to next job in queue.
                         log::error!("Start new job error: {:?}", e);
                     }
                     _ => {

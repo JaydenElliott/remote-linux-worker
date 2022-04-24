@@ -165,7 +165,6 @@ impl Job {
             // New output has been added. Send this to the client.
             let output = self.output.lock().await;
             if read_idx < output.len() {
-                log::error!("sending output");
                 tx_stream
                     .send(Ok(StreamResponse {
                         output: output[read_idx..output.len()].to_vec(),
