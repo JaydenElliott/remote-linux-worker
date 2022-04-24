@@ -15,9 +15,6 @@ use x509_parser::{extensions::ParsedExtension, prelude::X509Certificate, traits:
 
 use crate::utils::errors::RLWServerError;
 
-// TODO: make these configurable
-// Certificates and keys
-
 // To avoid privileged ports
 const PORT_MIN: u16 = 1024;
 const PORT_MAX: u16 = 65535;
@@ -97,25 +94,47 @@ fn load_private_key(path: &str) -> Result<PrivateKey, io::Error> {
     }
 }
 
-/// TODO: Document
-pub fn authorize_user(certs: Option<Arc<Vec<tonic::transport::Certificate>>>) -> Option<String> {
-    let cert = certs.unwrap()[0].clone().into_inner();
-    let (_, cert) = X509Certificate::from_der(&cert).unwrap();
+/// Parses an x509 certificate, returning any RFC822 email found in the SAN extension.
+///
+/// Will only search the last certificate in the chain for user identification.
+/// # Arguments
+/// - `certificates` - client certificate chain obtained from tonic::request::peer_certs() return type.
+///             
+pub fn authorize_user(
+    certificates: Option<Arc<Vec<tonic::transport::Certificate>>>,
+) -> Result<Option<String>, String> {
+    if cfg!(test) {
+        return Ok(Some("testuser".to_string()));
+    }
 
+    // Extract final certificate in chain
+    let certificate = certificates
+        .ok_or_else(|| "No certificates found".to_string())?
+        .last()
+        .ok_or_else(|| "No certificates found".to_string())?
+        .clone()
+        .into_inner();
+
+    // Parse certificate
+    let (_, cert) = X509Certificate::from_der(&certificate)
+        .map_err(|e| format!("Invalid certificate: {:?}", e))?;
+
+    // Get RFC822 name from SAN extension
     for ext in cert.extensions() {
         let parsed_ext = ext.parsed_extension();
         if let ParsedExtension::SubjectAlternativeName(san) = parsed_ext {
             for name in &san.general_names {
                 match name {
                     x509_parser::extensions::GeneralName::RFC822Name(email) => {
-                        return Some(email.to_string())
+                        return Ok(Some(email.to_string()))
                     }
                     _ => {}
                 }
             }
         }
     }
-    None
+    // No RFC822 name found in cert
+    Ok(None)
 }
 
 /// Ipv6 address parser and validator

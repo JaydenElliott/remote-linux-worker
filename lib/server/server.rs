@@ -73,8 +73,7 @@ pub struct ServerSettings {
     // Server certificate
     pub cert: String,
 
-    // TODO: UPDATE THIS naming!!!!!!!!!!!!!!!!!!!!!1
-    // Client CA to verify client cert against
+    // Client ca certificate to verify the client against
     pub client_ca: String,
     /*
     TODO: Add extra configuration options:
@@ -83,7 +82,6 @@ pub struct ServerSettings {
     - Option to manually configure TLS:
        - to use TLS v1.2 for an old client implementation
        - to allow different private key encryption formats
-    - Option to set the host and user CA
     */
 }
 
