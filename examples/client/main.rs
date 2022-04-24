@@ -9,7 +9,7 @@ mod utils;
 use crate::job_processor_api::{
     job_processor_service_client::JobProcessorServiceClient, StartRequest,
 };
-use crate::utils::configure_tls;
+use crate::utils::configure_mtls;
 
 use args::ExtCommand;
 use job_processor_api::{StatusRequest, StopRequest, StreamRequest};

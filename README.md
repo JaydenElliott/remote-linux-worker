@@ -25,7 +25,7 @@ Logging is used, so ensure `RUST_LOG=info` to see the full log output.
 
 ### Client
 
-The following are a set of examples commands used to interact with the server. To see the full CLI specification run.
+The following are a set of examples commands used to interact with the server. To see the full CLI specification first build the examples then run.
  ```
 cargo run --bin rlw-client --help
 
@@ -38,7 +38,7 @@ Run a script:
 ```
 cargo run --bin rlw-client start /bin/bash ./stream_job.sh
 ```
-Note: all jobs will run from the `examples/tests/test_env/` directory. This will later be configurable.
+All jobs will run from the `examples/tests/test_env/` directory. This will later be configurable.
 
 Run a command:
 ```
@@ -46,7 +46,7 @@ cargo run --bin rlw-client start echo hello world
 ```
 
 #### Stop Job
-Start job will return a job UUID. It is the client's responsible to store this for future commands.
+Start job will return a job UUID. It is the client's responsibility to store this for future commands.
 
 ```
 cargo run --bin rlw-client stop ${UUID} 
