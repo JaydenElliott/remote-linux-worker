@@ -9,12 +9,19 @@ RLW exposes two sub-libraries:
    - Client authorization.
 
 
+## Development
+
+To run the library unit tests ensure you are in the `remote-linux-worker/` directory and run:
+```
+cargo test --lib
+```
+
 ## Examples
 
 An example client/server implementation can be found in `remote-linux-worker/examples`. Ensure all the below commands are run from the `examples/` directory.
 
 ### TL;DR
-Start job, get uuid and pipe that to the stream command to get the output:
+Firstly ensure the server is running, then use the below command to start a job and pipe the UUID to the stream command to get the output:
 ```
 cargo run --bin rlw-client start /bin/bash ./stream_job.sh | xargs -I {} cargo run --bin rlw-client stream -s "{}"
 ```
@@ -88,12 +95,3 @@ To get the job status (`Running`, `Exited with Code` or `Exited with Signal`) ru
 ```
 cargo run --bin rlw-client status ${UUID} 
 ```
-
-## Development
-
-To run the library unit tests ensure you are in the projects top-most directory `remote-linux-worker/` and run:
-```
-cargo test --lib
-```
-
-

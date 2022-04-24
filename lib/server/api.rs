@@ -1,4 +1,4 @@
-//! Provides the exposed gRPC implemented functions to the server.
+//! API implementation to be used by the server
 
 use crate::rlwp::Job;
 use crate::server::user::User;
