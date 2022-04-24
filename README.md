@@ -10,7 +10,6 @@ RLW exposes two sub-libraries:
 
 
 
-
 ## Examples
 
 An example client/server implementation can be found in `remote-linux-worker/examples`. Ensure all the below commands are run from this directory.
@@ -24,7 +23,6 @@ cargo run --bin rlw-server
 
 Logging is used so ensure `RUST_LOG=info` to see the full log output.
 
-<br>
 
 ### Client
 
@@ -83,8 +81,6 @@ To get the job status (`Running`, `Exited with Code` or `Exited with Signal`) ru
 ```
 cargo run --bin rlw-client status ${UUID} 
 ```
-
-<br>
 
 ## Development
 
