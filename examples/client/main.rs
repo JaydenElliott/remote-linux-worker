@@ -1,4 +1,5 @@
 //! Example Client Implementation
+//!
 mod job_processor_api {
     tonic::include_proto!("job_processor_api");
 }
@@ -87,7 +88,10 @@ async fn stream_request(
     let mut stream = client.stream(request).await?.into_inner();
     while let Some(response) = stream.message().await? {
         if as_string {
-            println!("{:?}", std::str::from_utf8(&response.output));
+            match std::str::from_utf8(&response.output) {
+                Ok(s) => println!("{}", s),
+                Err(_) => println!("Error decoding output bytes"),
+            }
         } else {
             println!("{:?}", &response.output);
         }

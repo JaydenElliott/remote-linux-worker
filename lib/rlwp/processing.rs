@@ -2,7 +2,6 @@
 
 use crate::utils::errors::RLWServerError;
 
-use std::env;
 use std::io::{BufReader, Read};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::mpsc::Sender;
