@@ -18,7 +18,7 @@ pub enum WorkerAPI {
     /// Start a new process job
     Start {
         /// Command + arguments you wish to execute
-        /// Example : `cargo run`, `ls -al`, `/bin/bash script.sh`
+        /// Example : `cargo run`, `ls -la `, `/bin/bash script.sh`
         #[structopt(subcommand)]
         ext_command: ExtCommand,
     },
@@ -35,7 +35,7 @@ pub enum WorkerAPI {
 
     /// Stream all previous and upcoming stderr and stdout data for a specified job
     Stream {
-        /// Display incoming bytes as strings
+        /// Display utf8-valid bytes as strings
         #[structopt(short = "s", long)]
         as_string: bool,
 

@@ -8,7 +8,11 @@ const CLIENT_KEY: &str = "tls/client.key";
 const CLIENT_CERT: &str = "tls/client.pem";
 const SERVER_ROOT_CERT: &str = "tls/rootCA.pem";
 
-pub async fn configure_tls() -> Result<ClientTlsConfig, Box<dyn std::error::Error>> {
+// Domain to verify the server's TLS cert against
+const DOMAIN: &str = "localhost";
+
+/// Generates the client TLS configuration object.
+pub async fn configure_mtls() -> Result<ClientTlsConfig, Box<dyn std::error::Error>> {
     let server_ca_pem = tokio::fs::read(SERVER_ROOT_CERT).await?;
     let server_root_ca_cert = Certificate::from_pem(server_ca_pem);
     let client_cert = tokio::fs::read(CLIENT_CERT).await?;
@@ -16,7 +20,7 @@ pub async fn configure_tls() -> Result<ClientTlsConfig, Box<dyn std::error::Erro
     let client_identity = Identity::from_pem(client_cert, client_key);
 
     let tls_config = ClientTlsConfig::new()
-        .domain_name("localhost")
+        .domain_name(DOMAIN)
         .ca_certificate(server_root_ca_cert)
         .identity(client_identity);
 

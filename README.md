@@ -1,18 +1,17 @@
 # RLW - Remote Linux Worker
-A lightweight remote linux process execution server-side library.
+A remote linux process execution server-side library and gRPC server.
 
 RLW exposes two sub-libraries:
-1. `rlwp` - Remote Linux Worker Processor: an interface that allows users to start, stop, get the status of and stream linux process jobs.
+1. `rlwp` - Remote Linux Worker Processor: an interface that allows users to start, stop, stream and get the status of linux process jobs.
 2. `server` - An all-included gRPC server to expose the above functionality to a client. The server provides the following:
    - An API to handle jobs. The api protobuf specification can be found in `proto/service.proto`.
    - A secure mTLS configuration.
    - Client authorization.
 
 
-
 ## Examples
 
-An example client/server implementation can be found in `remote-linux-worker/examples`. Ensure all the below commands are run from this directory.
+An example client/server implementation can be found in `remote-linux-worker/examples`. Ensure all the below commands are run from the `examples/` directory.
 
 ### Server
 
@@ -21,7 +20,7 @@ To start the server run:
 cargo run --bin rlw-server
 ```
 
-Logging is used so ensure `RUST_LOG=info` to see the full log output.
+Logging is used, so ensure `RUST_LOG=info` to see the full log output.
 
 
 ### Client
@@ -84,7 +83,7 @@ cargo run --bin rlw-client status ${UUID}
 
 ## Development
 
-To run the library unit tests ensure you are in the projects top-most directory `..../remote-linux-worker` and run:
+To run the library unit tests ensure you are in the projects top-most directory `remote-linux-worker/` and run:
 ```
 cargo test --lib
 ```

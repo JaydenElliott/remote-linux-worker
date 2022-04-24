@@ -1,5 +1,5 @@
 //! Example Client Implementation
-//!
+
 mod job_processor_api {
     tonic::include_proto!("job_processor_api");
 }
@@ -15,12 +15,11 @@ use args::ExtCommand;
 use job_processor_api::{StatusRequest, StopRequest, StreamRequest};
 use std::time::Duration;
 use structopt::StructOpt;
-use tonic::transport::Channel;
-use tonic::Request;
+use tonic::{transport::Channel, Request};
 
 // TODO: move these into a configuration file
-const REQUEST_TIMEOUT: u64 = 30;
-const CONNECTION_TIMEOUT: u64 = 30;
+const REQUEST_TIMEOUT: u64 = 60;
+const CONNECTION_TIMEOUT: u64 = 60;
 const RATE_LIMIT_CONNECTIONS: u64 = 32;
 const RATE_LIMIT_DURATION: u64 = 1;
 
@@ -28,7 +27,7 @@ const RATE_LIMIT_DURATION: u64 = 1;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup client configuration
     let opt = args::Args::from_args();
-    let tls_config = configure_tls().await?;
+    let tls_config = configure_mtls().await?;
     let channel = Channel::from_shared(opt.address)?
         .timeout(Duration::from_secs(REQUEST_TIMEOUT))
         .connect_timeout(Duration::from_secs(CONNECTION_TIMEOUT))
@@ -79,6 +78,7 @@ async fn stop_request(
 }
 
 /// Process a stream request
+/// If `as_string` is true, utf8-valid bytes will be displayed as strings
 async fn stream_request(
     client: &mut JobProcessorServiceClient<Channel>,
     uuid: String,
