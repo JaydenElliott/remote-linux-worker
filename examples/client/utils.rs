@@ -2,8 +2,7 @@
 
 use tonic::transport::{Certificate, ClientTlsConfig, Identity};
 
-// TODO: Make these configurable through a config file
-// or environment variables
+// TODO: Make these configurable (file, cmd line or env variable)
 const CLIENT_KEY: &str = "tls/client.key";
 const CLIENT_CERT: &str = "tls/client.pem";
 const SERVER_ROOT_CERT: &str = "tls/rootCA.pem";

@@ -32,6 +32,8 @@ cargo run --bin rlw-client --help
 cargo run rlw-client {subcommand} --help
  ``` 
 
+The below commands are prefaced with `cargo run --bin`. If you would prefer to run the binary directly (much faster), copy `examples/target/debug/rlw-client` to the `examples/` directory and use that instead.
+
 #### Start Job
 
 Run a script: 
