@@ -1,24 +1,24 @@
-use std::{
-    net::{SocketAddr, SocketAddrV6},
-    str::FromStr,
-    sync::Arc,
-};
+//! Utilities to setup mTLS
 
+use crate::utils::errors::RLWServerError;
 use rustls::{
     AllowAnyAuthenticatedClient, Certificate, PrivateKey, ProtocolVersion, RootCertStore,
     ServerConfig,
 };
 use rustls_pemfile::{certs, Item};
-use std::{fs, io};
+use std::{
+    fs, io,
+    net::{SocketAddr, SocketAddrV6},
+    str::FromStr,
+    sync::Arc,
+};
 use tonic::transport::ServerTlsConfig;
 use x509_parser::{extensions::ParsedExtension, prelude::X509Certificate, traits::FromDer};
-
-use crate::utils::errors::RLWServerError;
 
 // To avoid privileged ports
 const PORT_MIN: u16 = 1024;
 
-/// Configures the custom TLS settings for the gRPC server
+/// Configure the custom mTLS settings for the gRPC server
 pub fn configure_server_tls(
     server_key: &str,
     server_cert: &str,
@@ -51,8 +51,6 @@ pub fn configure_server_tls(
         .map_err(|e| RLWServerError(format!("Invalid certificate error: {:?}", e)))?;
     config.ciphersuites = suites;
     config.versions = protocol_version;
-
-    // TODO: remove if not required
     config.alpn_protocols = vec![b"h2".to_vec()];
 
     let tls_config = ServerTlsConfig::new()
@@ -93,17 +91,18 @@ fn load_private_key(path: &str) -> Result<PrivateKey, io::Error> {
     }
 }
 
-/// Parses an x509 certificate, returning any RFC822 email found in the SAN extension.
+/// Parses an x509 certificate, returning any RFC822 name found in the SAN extension.
 ///
 /// Will only search the last certificate in the chain for user identification.
 /// # Arguments
-/// - `certificates` - client certificate chain obtained from tonic::request::peer_certs() return type.
+/// - `certificates` - client certificate chain obtained from tonic::request::peer_certs().
 ///             
 pub fn authorize_user(
     certificates: Option<Arc<Vec<tonic::transport::Certificate>>>,
 ) -> Result<Option<String>, String> {
+    // No certificates are used in unit tests
     if cfg!(test) {
-        return Ok(Some("testuser".to_string()));
+        return Ok(Some("testuser@foo.com".to_string()));
     }
 
     // Extract final certificate in chain
@@ -123,11 +122,8 @@ pub fn authorize_user(
         let parsed_ext = ext.parsed_extension();
         if let ParsedExtension::SubjectAlternativeName(san) = parsed_ext {
             for name in &san.general_names {
-                match name {
-                    x509_parser::extensions::GeneralName::RFC822Name(email) => {
-                        return Ok(Some(email.to_string()))
-                    }
-                    _ => {}
+                if let x509_parser::extensions::GeneralName::RFC822Name(email) = name {
+                    return Ok(Some(email.to_string()));
                 }
             }
         }
@@ -138,10 +134,7 @@ pub fn authorize_user(
 
 /// Ipv6 address parser and validator
 ///
-/// Validates if the address is valid IPv6 and the port
-/// is within range.
-///
-/// Returns a generic address in order to integrate with the tonic server
+/// Returns a generic address to integrate with the tonic server
 pub fn ipv6_address_validator(address: &str) -> Result<SocketAddr, RLWServerError> {
     let addr = SocketAddrV6::from_str(address)
         .map_err(|e| RLWServerError(format!("Invalid Ipv6 address {:?}", e)))?;
