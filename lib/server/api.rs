@@ -152,8 +152,8 @@ impl JobProcessor {
     /// # Arguments
     /// * `user_id` - id/email parsed through client certificate
     fn get_user(&self, user_id: &str) -> Result<Arc<User>, RLWServerError> {
-        let table_arc = Arc::clone(&self.user_table);
-        let mut table = table_arc
+        let mut table = self
+            .user_table
             .lock()
             .map_err(|e| RLWServerError(format!("Lock poison error: {:?}", e)))?;
 

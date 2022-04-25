@@ -77,10 +77,9 @@ impl Job {
         }
 
         // Populate stdout/stderr output
-        let new_output = Arc::clone(&self.output_signal);
         for rec in rx_output {
             self.output.lock().await.extend(rec);
-            new_output.signal();
+            self.output_signal.signal();
         }
 
         let thread_status = thread
