@@ -14,8 +14,8 @@ use crate::utils::{
 use tonic::transport;
 
 /// # RLW Server
-/// A Remote Linux Worker server will listen for
-/// requests to `start`, `stop`, `status` and `stream` process jobs.
+/// A Remote Linux Worker gRPC Server that will listen for requests to `start`, `stop`,
+/// `status` and `stream` process jobs.
 ///
 /// This server is a wrapper around the `tonic::transport::Server`.
 ///
@@ -35,18 +35,17 @@ pub struct Server {
 }
 
 impl Server {
-    // Create a new server instance
+    /// Create a new server instance
     pub fn new(config: ServerSettings) -> Self {
         Self { config }
     }
 
-    /// Start the gRPC server using the configuration provided in `new(config)`
-    /// and handle all incoming requests.
+    /// Start the gRPC server and handle all incoming requests.
     pub async fn run(&self) -> Result<(), RLWServerError> {
         // Validate and parse the IPv6 address
         let addr = ipv6_address_validator(&self.config.address)?;
 
-        // // Configure and initialize the server
+        // Configure and initialize the server
         let processor = JobProcessor::new();
         let svc = JobProcessorServiceServer::new(processor);
         let tls_config =
@@ -71,13 +70,13 @@ pub struct ServerSettings {
     /// IPv6 address + port the user wishes to run the server on
     pub address: String,
 
-    // Server public key
+    /// Server public key
     pub key: String,
 
-    // Server certificate
+    /// Server certificate
     pub cert: String,
 
-    // Client ca certificate to verify the client against
+    /// Client ca certificate to verify the client against
     pub client_ca: String,
     /*
     TODO: Add extra configuration options:

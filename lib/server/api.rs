@@ -50,7 +50,12 @@ impl JobProcessorService for JobProcessor {
 
         // Start Job
         let req = request.into_inner();
-        let uuid = user.start_new_job(req.command, req.arguments);
+        let uuid = user
+            .start_new_job(req.command, req.arguments)
+            .map_err(|e| {
+                log::error!("Start request error: {:?}", e);
+                Status::unknown("Server Error")
+            })?;
         Ok(Response::new(StartResponse { uuid }))
     }
 
@@ -191,8 +196,12 @@ mod tests {
         let command = "/bin/bash".to_string();
         let arguments = vec![TESTING_SCRIPTS_DIR.to_string() + "start_request.sh"];
 
+        // Start request
         let mock_request = Request::new(StartRequest { command, arguments });
-        job_processor.start(mock_request).await.unwrap();
+        job_processor
+            .start(mock_request)
+            .await
+            .map_err(|e| RLWServerError(format!("Start request error: {:?}", e)))?;
 
         Ok(())
     }
@@ -202,53 +211,63 @@ mod tests {
     async fn test_stop_request() -> Result<(), RLWServerError> {
         // Setup
         let job_processor = Arc::new(JobProcessor::new());
-
         let command = "/bin/bash".to_string();
         let arguments = vec![TESTING_SCRIPTS_DIR.to_string() + "start_request.sh"];
+
+        // Start request
         let mock_start_request = Request::new(StartRequest { command, arguments });
         let uuid = job_processor
             .start(mock_start_request)
             .await
-            .unwrap()
+            .map_err(|e| RLWServerError(format!("Start request error: {:?}", e)))?
             .into_inner()
             .uuid;
 
+        // Arbitrary time between start and stop request
         tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
 
+        // Stop Request
         let mock_stop_request = Request::new(StopRequest {
             uuid,
             forced: false,
         });
-
-        job_processor.stop(mock_stop_request).await.unwrap();
-
+        job_processor
+            .stop(mock_stop_request)
+            .await
+            .map_err(|e| RLWServerError(format!("Stop request error: {:?}", e)))?;
         Ok(())
     }
 
     /// Tests the status request of a new job
+    ///
+    /// Process:
+    /// 1. Start a job.
+    /// 2. Query the status to ensure it is running.
+    /// 3. Stop the job.
+    /// 4. Query the status to ensure it stopped with Signal(15).  
     #[tokio::test(flavor = "multi_thread")]
     async fn test_status_request() -> Result<(), RLWServerError> {
         // Setup
         let job_processor = Arc::new(JobProcessor::new());
-
         let command = "/bin/bash".to_string();
         let arguments = vec![TESTING_SCRIPTS_DIR.to_string() + "start_request.sh"];
+
+        // Start request
         let mock_start_request = Request::new(StartRequest { command, arguments });
         let uuid = job_processor
             .start(mock_start_request)
             .await
-            .unwrap()
+            .map_err(|e| RLWServerError(format!("Start request error: {:?}", e)))?
             .into_inner()
             .uuid;
+        tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-
+        // First status request
         let mock_status_request = Request::new(StatusRequest { uuid: uuid.clone() });
-
         let status = job_processor
             .status(mock_status_request)
             .await
-            .unwrap()
+            .map_err(|e| RLWServerError(format!("Status request error: {:?}", e)))?
             .into_inner();
 
         assert_eq!(
@@ -256,18 +275,22 @@ mod tests {
             Some(status_response::ProcessStatus::Running(true))
         );
 
+        // Stop request
         let mock_stop_request = Request::new(StopRequest {
             uuid: uuid.clone(),
             forced: false,
         });
         job_processor.stop(mock_stop_request).await.unwrap();
 
+        // Give the process time to shutdown
         tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+        // Second status request
         let mock_status_request2 = Request::new(StatusRequest { uuid });
         let status = job_processor
             .status(mock_status_request2)
             .await
-            .unwrap()
+            .map_err(|e| RLWServerError(format!("Status request error: {:?}", e)))?
             .into_inner();
 
         assert_eq!(

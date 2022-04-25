@@ -1,4 +1,5 @@
-//! Handles all the type implementations for the server
+//! Handles all the user level functionality for the server.
+//! Includes job handling, user queue handling and the storage of job information.
 
 use crate::rlwp::Job;
 use crate::utils::errors::RLWServerError;
@@ -15,8 +16,7 @@ pub struct User {
     /// Maps job uuid to Job
     jobs: Arc<Mutex<HashMap<String, Arc<Job>>>>,
 
-    /// A queue storing new job requests.
-    /// Each job request contains a new Command and
+    /// A queue storing new job requests. Each job request contains a new command and
     /// a list of arguments to accompany the command.
     #[allow(clippy::type_complexity)]
     job_queue: Arc<Mutex<VecDeque<(String, Vec<String>)>>>,
@@ -31,64 +31,88 @@ impl User {
         }
     }
 
-    /// TODO: check no race condition on starting a job
-    /// it returning "one",no thread started, and teh worker
-    /// thread finishing
-    pub fn start_new_job(self: Arc<Self>, command: String, args: Vec<String>) -> String {
+    /// Starts a new process job
+    ///
+    /// One of two scenarios can occur:
+    /// 1. The queue is empty: an async task will be spawned. This task will process the job provided.
+    ///    When finished it will attempt to process a new job if the queue in non-empty.
+    ///
+    /// 2. The queue is non-empty: the job will be added to the queue to be processed by the spawned task.
+    pub fn start_new_job(
+        self: Arc<Self>,
+        command: String,
+        args: Vec<String>,
+    ) -> Result<String, RLWServerError> {
         let uuid = Uuid::new_v4().to_string();
 
         // Add new job to queue
-        let first = self.add_to_queue(command, args);
+        let first = self.add_to_queue(command, args)?;
         if !first {
-            return uuid;
+            return Ok(uuid);
         }
+
         // Spawn queue processor thread
         let uuid_t = uuid.clone();
         tokio::spawn(async move {
-            while let Some((command, args)) = self.get_new_from_queue() {
-                let job = self.get_new_job(&uuid_t);
-                match job.start_command(command, args).await {
+            // Process jobs while the queue is non-empty
+            while let Some((command, args)) = self.get_command_from_queue() {
+                // Create a new job
+                match self.get_new_job(&uuid_t) {
+                    Ok(job) => {
+                        // Start job
+                        if let Err(e) = job.start_command(command, args).await {
+                            // Cant return error here as thread is never explicitly joined.
+                            // Log error and move on to the next job in the queue.
+                            log::error!("Start new job error: {:?}", e);
+                        }
+                    }
                     Err(e) => {
                         // Cant return error here as thread is never explicitly joined.
-                        // Log error and move on to next job in queue.
-                        log::error!("Start new job error: {:?}", e);
-                    }
-                    _ => {
-                        job.output_signal.signal();
+                        // Log error and move on to the next job in the queue.
+                        log::error!("Get new job error: {:?}", e);
                     }
                 }
             }
         });
-        uuid
+
+        Ok(uuid)
     }
 
     /// Add a new command set to the queue
     ///
     /// * Returns
     ///  bool - true if the queue was empty before adding the new command set - this implying
-    ///         that a new thread needs starting to process the queue.
+    ///         that a new thread needs starting to process the job.
     ///          
-    fn add_to_queue(&self, command: String, args: Vec<String>) -> bool {
+    fn add_to_queue(&self, command: String, args: Vec<String>) -> Result<bool, RLWServerError> {
         let queue_arc = Arc::clone(&self.job_queue);
-        let mut queue = queue_arc.lock().unwrap();
+        let mut queue = queue_arc
+            .lock()
+            .map_err(|e| RLWServerError(format!("Job queue lock error: {:?}", e)))?;
         queue.push_back((command, args));
-        queue.len() == 1
+        Ok(queue.len() == 1)
     }
 
     /// Get a command set from the queue
-    fn get_new_from_queue(&self) -> Option<(String, Vec<String>)> {
+    fn get_command_from_queue(&self) -> Option<(String, Vec<String>)> {
         let queue_arc = Arc::clone(&self.job_queue);
-        let mut queue = queue_arc.lock().unwrap();
+        let mut queue = queue_arc.lock().ok()?;
         queue.pop_front()
     }
 
     /// Create a new job and return a pointer to it
-    fn get_new_job(&self, uuid: &str) -> Arc<Job> {
+    fn get_new_job(&self, uuid: &str) -> Result<Arc<Job>, RLWServerError> {
         let jobs_arc = Arc::clone(&self.jobs);
-        let mut jobs = jobs_arc.lock().unwrap();
+        let mut jobs = jobs_arc
+            .lock()
+            .map_err(|e| RLWServerError(format!("Job hashmap lock error: {:?}", e)))?;
         jobs.insert(uuid.to_string(), Arc::new(Job::default()));
-        let job = Arc::clone(jobs.get(uuid).unwrap());
-        job
+        let job = Arc::clone(jobs.get(uuid).ok_or_else(|| {
+            RLWServerError(
+                "Undefined behavior: inserted new job, then failed to retrieve it".to_string(),
+            )
+        })?);
+        Ok(job)
     }
 
     /// Get a pointer to a job from its uuid
