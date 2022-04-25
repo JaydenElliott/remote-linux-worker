@@ -14,10 +14,10 @@ TODO in the future:
 
 */
 
-// General Server Error to send to client
+// General server error to send to client
 pub const GENERAL_SERVER_ERR: &str = "Server Error";
 
-// No Associated Job
+// No associated job
 pub const NO_UUID_JOB: &str = "No job found with the provided uuid";
 
 /// A general purpose error wrapper for the rlw server

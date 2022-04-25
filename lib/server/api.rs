@@ -280,7 +280,10 @@ mod tests {
             uuid: uuid.clone(),
             forced: false,
         });
-        job_processor.stop(mock_stop_request).await.unwrap();
+        job_processor
+            .stop(mock_stop_request)
+            .await
+            .map_err(|e| RLWServerError(format!("Stop request error: {:?}", e)))?;
 
         // Give the process time to shutdown
         tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;

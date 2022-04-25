@@ -82,7 +82,7 @@ impl User {
     ///
     /// * Returns
     ///  bool - true if the queue was empty before adding the new command set - this implying
-    ///         that a new thread needs starting to process the job.
+    ///         that a new thread need to be spawned to process the job.
     ///          
     fn add_to_queue(&self, command: String, args: Vec<String>) -> Result<bool, RLWServerError> {
         let queue_arc = Arc::clone(&self.job_queue);
@@ -105,7 +105,7 @@ impl User {
         let jobs_arc = Arc::clone(&self.jobs);
         let mut jobs = jobs_arc
             .lock()
-            .map_err(|e| RLWServerError(format!("Job hashmap lock error: {:?}", e)))?;
+            .map_err(|e| RLWServerError(format!("Job HashMap lock error: {:?}", e)))?;
         jobs.insert(uuid.to_string(), Arc::new(Job::default()));
         let job = Arc::clone(jobs.get(uuid).ok_or_else(|| {
             RLWServerError(
