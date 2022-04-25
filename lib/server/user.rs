@@ -110,17 +110,17 @@ impl User {
             .lock()
             .map_err(|e| RLWServerError(format!("Job HashMap lock error: {:?}", e)))?;
         jobs.insert(uuid.to_string(), Arc::new(Job::default()));
-        let job = Arc::clone(jobs.get(uuid).ok_or_else(|| {
+
+        Ok(Arc::clone(jobs.get(uuid).ok_or_else(|| {
             RLWServerError(
                 "Undefined behavior: inserted new job, then failed to retrieve it".to_string(),
             )
-        })?);
-        Ok(job)
+        })?))
     }
 
     /// Get a pointer to a job from its uuid
     pub fn get_job(&self, uuid: &str) -> Result<Arc<Job>, RLWServerError> {
-        let job = Arc::clone(
+        Ok(Arc::clone(
             self.jobs
                 .lock()
                 .map_err(|e| RLWServerError(format!("Lock poison error: {:?}", e)))?
@@ -128,7 +128,6 @@ impl User {
                 .ok_or_else(|| {
                     RLWServerError("No job with the specified uuid exists".to_string())
                 })?,
-        );
-        Ok(job)
+        ))
     }
 }
