@@ -16,10 +16,10 @@ pub struct User {
     /// Maps job uuid to Job
     jobs: Arc<Mutex<HashMap<String, Arc<Job>>>>,
 
-    /// A queue storing new job requests. Each job request contains a new command and
-    /// a list of arguments to accompany the command.
+    /// A queue storing new job requests. Each job request contains a new command,
+    /// a list of arguments to accompany the command and a job uuid.
     #[allow(clippy::type_complexity)]
-    job_queue: Arc<Mutex<VecDeque<(String, Vec<String>)>>>,
+    job_queue: Arc<Mutex<VecDeque<(String, Vec<String>, String)>>>,
 }
 
 impl User {
@@ -46,18 +46,17 @@ impl User {
         let uuid = Uuid::new_v4().to_string();
 
         // Add new job to queue
-        let first = self.add_to_queue(command, args)?;
+        let first = self.add_to_queue(command, args, uuid.clone())?;
         if !first {
             return Ok(uuid);
         }
 
         // Spawn queue processor thread
-        let uuid_t = uuid.clone();
         tokio::spawn(async move {
             // Process jobs while the queue is non-empty
-            while let Some((command, args)) = self.get_command_from_queue() {
+            while let Some((command, args, uuid)) = self.get_command_from_queue() {
                 // Create a new job
-                match self.get_new_job(&uuid_t) {
+                match self.get_new_job(&uuid) {
                     Ok(job) => {
                         // Start job
                         if let Err(e) = job.start_command(command, args).await {
@@ -84,17 +83,22 @@ impl User {
     ///  bool - true if the queue was empty before adding the new command set - this implying
     ///         that a new thread need to be spawned to process the job.
     ///          
-    fn add_to_queue(&self, command: String, args: Vec<String>) -> Result<bool, RLWServerError> {
+    fn add_to_queue(
+        &self,
+        command: String,
+        args: Vec<String>,
+        uuid: String,
+    ) -> Result<bool, RLWServerError> {
         let queue_arc = Arc::clone(&self.job_queue);
         let mut queue = queue_arc
             .lock()
             .map_err(|e| RLWServerError(format!("Job queue lock error: {:?}", e)))?;
-        queue.push_back((command, args));
+        queue.push_back((command, args, uuid));
         Ok(queue.len() == 1)
     }
 
     /// Get a command set from the queue
-    fn get_command_from_queue(&self) -> Option<(String, Vec<String>)> {
+    fn get_command_from_queue(&self) -> Option<(String, Vec<String>, String)> {
         let queue_arc = Arc::clone(&self.job_queue);
         let mut queue = queue_arc.lock().ok()?;
         queue.pop_front()
