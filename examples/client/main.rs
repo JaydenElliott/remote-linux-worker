@@ -13,6 +13,7 @@ use crate::utils::configure_mtls;
 
 use args::ExtCommand;
 use job_processor_api::{StatusRequest, StopRequest, StreamRequest};
+use std::io::Write;
 use std::time::Duration;
 use structopt::StructOpt;
 use tonic::{transport::Channel, Request};
@@ -44,9 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match opt.api_command {
         args::WorkerAPI::Start { ext_command } => start_request(&mut client, ext_command).await?,
         args::WorkerAPI::Stop { uuid, forced } => stop_request(&mut client, uuid, forced).await?,
-        args::WorkerAPI::Stream { uuid, as_string } => {
-            stream_request(&mut client, uuid, as_string).await?
-        }
+        args::WorkerAPI::Stream { uuid } => stream_request(&mut client, uuid).await?,
         args::WorkerAPI::Status { uuid } => status_request(&mut client, uuid).await?,
     };
     Ok(())
@@ -82,19 +81,11 @@ async fn stop_request(
 async fn stream_request(
     client: &mut JobProcessorServiceClient<Channel>,
     uuid: String,
-    as_string: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let request = Request::new(StreamRequest { uuid });
     let mut stream = client.stream(request).await?.into_inner();
     while let Some(response) = stream.message().await? {
-        if as_string {
-            match std::str::from_utf8(&response.output) {
-                Ok(s) => println!("{}", s),
-                Err(_) => println!("Error decoding output bytes"),
-            }
-        } else {
-            println!("{:?}", &response.output);
-        }
+        std::io::stdout().write_all(&response.output)?;
     }
     Ok(())
 }

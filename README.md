@@ -24,7 +24,7 @@ An example client / server implementation can be found in `remote-linux-worker/e
 Start the server with `cargo run --bin rlw-server`.
 In a separate window / tab use the below command to start a job (run `stream_job.sh`) and pipe the UUID to the stream command to get the output:
 ```
-cargo run --bin rlw-client start /bin/bash ./stream_job.sh | xargs -I {} cargo run --bin rlw-client stream -s "{}"
+cargo run --bin rlw-client start /bin/bash ./stream_job.sh | xargs -I {} cargo run --bin rlw-client stream "{}"
 ```
 
 ### Server
@@ -81,15 +81,6 @@ To obtain the history and live output of a job run:
 ```
 cargo run --bin rlw-client stream {UUID} 
 ```
-
-If the output is valid UTF-8, it can be returned as a string with:
-
-```
-cargo run --bin rlw-client stream -s {UUID} 
-```
-
-Note: If this flag is set, any non-UTF-8 bytes will display an error and the stream will continue.
-
 
 #### Job Status 
 To get the job status (`Running`, `Exited with Code` or `Exited with Signal`), run:

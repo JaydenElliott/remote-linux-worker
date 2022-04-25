@@ -35,10 +35,6 @@ pub enum WorkerAPI {
 
     /// Stream all previous and upcoming stderr and stdout data for a specified job
     Stream {
-        /// Display utf8-valid bytes as strings
-        #[structopt(short = "s", long)]
-        as_string: bool,
-
         /// Process uuid
         uuid: String,
     },
