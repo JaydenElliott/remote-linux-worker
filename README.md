@@ -22,7 +22,7 @@ An example client / server implementation can be found in `remote-linux-worker/e
 
 ### TL;DR
 Start the server with `cargo run --bin rlw-server`.
-In a separate window / tab use the below command to start a job and pipe the UUID to the stream command to get the output:
+In a separate window / tab use the below command to start a job (run `stream_job.sh`) and pipe the UUID to the stream command to get the output:
 ```
 cargo run --bin rlw-client start /bin/bash ./stream_job.sh | xargs -I {} cargo run --bin rlw-client stream -s "{}"
 ```
@@ -46,7 +46,7 @@ cargo run --bin rlw-client --help
 cargo run rlw-client {subcommand} --help
  ``` 
 
-The below commands are prefaced with `cargo run --bin`. If you would prefer to run the binary directly (much faster), copy `examples/target/debug/rlw-client` to the `examples/` directory and use that instead.
+The commands below are prefaced with `cargo run --bin`. If you would prefer to run the binary directly (much faster), copy `examples/target/debug/rlw-client` to the `examples/` directory and use that instead.
 
 #### Start Job
 
@@ -61,14 +61,15 @@ Run a command:
 cargo run --bin rlw-client start echo hello world
 ```
 
-#### Stop Job
 Start job will return a job UUID. It is the client's responsibility to store this for future commands.
+
+#### Stop Job
 
 ```
 cargo run --bin rlw-client stop {UUID} 
 ```
 
-A job can be forcefully closed with:
+A job can be forcefully shutdown with:
 ```
 cargo run --bin rlw-client stop -f {UUID} 
 ```

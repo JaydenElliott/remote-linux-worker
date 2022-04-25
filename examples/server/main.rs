@@ -1,4 +1,3 @@
-use env_logger;
 use rlw::server::{Server, ServerSettings};
 
 const KEY: &str = "tls/server.key";
