@@ -89,8 +89,8 @@ impl User {
         args: Vec<String>,
         uuid: String,
     ) -> Result<bool, RLWServerError> {
-        let queue_arc = Arc::clone(&self.job_queue);
-        let mut queue = queue_arc
+        let mut queue = self
+            .job_queue
             .lock()
             .map_err(|e| RLWServerError(format!("Job queue lock error: {:?}", e)))?;
         queue.push_back((command, args, uuid));
@@ -99,15 +99,14 @@ impl User {
 
     /// Get a command set from the queue
     fn get_command_from_queue(&self) -> Option<(String, Vec<String>, String)> {
-        let queue_arc = Arc::clone(&self.job_queue);
-        let mut queue = queue_arc.lock().ok()?;
+        let mut queue = self.job_queue.lock().ok()?;
         queue.pop_front()
     }
 
     /// Create a new job and return a pointer to it
     fn get_new_job(&self, uuid: &str) -> Result<Arc<Job>, RLWServerError> {
-        let jobs_arc = Arc::clone(&self.jobs);
-        let mut jobs = jobs_arc
+        let mut jobs = self
+            .jobs
             .lock()
             .map_err(|e| RLWServerError(format!("Job HashMap lock error: {:?}", e)))?;
         jobs.insert(uuid.to_string(), Arc::new(Job::default()));
@@ -121,9 +120,8 @@ impl User {
 
     /// Get a pointer to a job from its uuid
     pub fn get_job(&self, uuid: &str) -> Result<Arc<Job>, RLWServerError> {
-        let jobs_arc = &*Arc::clone(&self.jobs);
         let job = Arc::clone(
-            jobs_arc
+            self.jobs
                 .lock()
                 .map_err(|e| RLWServerError(format!("Lock poison error: {:?}", e)))?
                 .get(uuid)
