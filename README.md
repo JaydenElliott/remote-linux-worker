@@ -18,7 +18,7 @@ cargo test --lib
 
 ## Examples
 
-An example client / server implementation can be found in `remote-linux-worker/examples`. Ensure all of the below commands are run from the `examples/` directory.
+An example client / server implementation can be found in `remote-linux-worker/examples`.
 
 ### TL;DR
 Start the server with `cargo run --bin rlw-server`.
@@ -46,7 +46,7 @@ cargo run --bin rlw-client --help
 cargo run rlw-client {subcommand} --help
  ``` 
 
-The commands below are prefaced with `cargo run --bin`. If you would prefer to run the binary directly (much faster), copy `examples/target/debug/rlw-client` to the `examples/` directory and use that instead.
+The commands below are prefaced with `cargo run --bin`. If you would prefer to run the binary directly (much faster), copy `examples/target/debug/rlw-client` to the root project directory and use that instead.
 
 #### Start Job
 
@@ -54,7 +54,7 @@ Run a script:
 ```
 cargo run --bin rlw-client start /bin/bash ./stream_job.sh
 ```
-All jobs will run from the `examples/tests/test_env/` directory. This will later be configurable.
+All jobs will run from the `tests/test_env/` directory. This will later be configurable.
 
 Run a command:
 ```

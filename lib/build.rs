@@ -1,4 +1,4 @@
-const RLW_PROTO_PATH: &str = "./proto/service.proto";
+const RLW_PROTO_PATH: &str = "../proto/service.proto";
 
 fn main() {
     tonic_build::compile_protos(RLW_PROTO_PATH).unwrap_or_else(|e| {

@@ -13,7 +13,7 @@ name = "rlw-server"
 path = "server/main.rs"
 
 [dependencies]
-rlw = {path = "../"}
+rlw = {path = "../lib"}
 tonic = {version = "0.6.2", features = ["transport", "tls" , "tls-roots"] }
 tokio = { version = "1.17.0", features = ["rt-multi-thread", "macros", "sync", "fs"] } 
 structopt = "0.3.26"

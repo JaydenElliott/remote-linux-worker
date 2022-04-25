@@ -1,25 +1,6 @@
-[package]
-name = "rlw"
-version = "0.1.0"
-edition = "2021"
-authors = ["Jayden Elliott <jayden.elliott@outlook.com>"]
+[workspace]
 
-[lib]
-name = "rlw"
-path = "lib/lib.rs"
-
-[dependencies]
-tonic = {version = "0.6.2", features = ["transport", "tls" , "tls-roots"] }
-tokio = { version = "1.17.0", features = ["rt-multi-thread", "macros", "sync"] } 
-tokio-stream = "0.1"
-rustls = "0.19.1"
-rustls-pemfile = "0.3.0"
-prost = "0.9"
-nix = "0.23.1"
-synchronoise = "1.0.0"
-log = "0.4.16"
-x509-parser = "0.13.2"
-uuid = {version = "1.0.0", features = ["v4", "fast-rng"]}
-
-[build-dependencies]
-tonic-build = "0.6.0"
+members = [
+  "lib",
+  "examples"
+]

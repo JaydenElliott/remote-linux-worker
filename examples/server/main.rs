@@ -1,8 +1,8 @@
 use rlw::server::{Server, ServerSettings};
 
-const KEY: &str = "tls/server.key";
-const CERT: &str = "tls/server.pem";
-const CLIENT_CERT: &str = "tls/rootCA.pem";
+const KEY: &str = "examples/tls/server.key";
+const CERT: &str = "examples/tls/server.pem";
+const CLIENT_CERT: &str = "examples/tls/rootCA.pem";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

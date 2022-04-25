@@ -3,9 +3,9 @@
 use tonic::transport::{Certificate, ClientTlsConfig, Identity};
 
 // TODO: Make these configurable (file, cmd line or env variable)
-const CLIENT_KEY: &str = "tls/client.key";
-const CLIENT_CERT: &str = "tls/client.pem";
-const SERVER_ROOT_CERT: &str = "tls/rootCA.pem";
+const CLIENT_KEY: &str = "examples/tls/client.key";
+const CLIENT_CERT: &str = "examples/tls/client.pem";
+const SERVER_ROOT_CERT: &str = "examples/tls/rootCA.pem";
 
 // Domain to verify the server's TLS cert against
 const DOMAIN: &str = "localhost";
