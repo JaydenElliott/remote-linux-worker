@@ -39,10 +39,8 @@ impl JobProcessorService for JobProcessor {
     ) -> Result<Response<StartResponse>, Status> {
         log::info!("Start Request");
 
-        // Authorize user and get user object
-        let user_id = tls::authorize_user(request.peer_certs())
-            .map_err(Status::unknown)?
-            .ok_or_else(|| Status::unknown("User is not authorized"))?;
+        // Get User
+        let user_id = tls::get_authenticated_user_id(&request)?;
         let user = self.get_user(&user_id).map_err(|e| {
             log::error!("Start request error: {:?}", e);
             Status::unknown("Server Error")
@@ -62,16 +60,13 @@ impl JobProcessorService for JobProcessor {
     /// Stop a running process job
     async fn stop(&self, request: Request<StopRequest>) -> Result<Response<()>, Status> {
         log::info!("Stop Request");
-        // Authorize user
-        let user_id = tls::authorize_user(request.peer_certs())
-            .map_err(Status::unknown)?
-            .ok_or_else(|| Status::unknown("User is not authorized"))?;
+        let user_id = tls::get_authenticated_user_id(&request)?;
 
         // Get Job
         let req = request.into_inner();
         let job = self.get_users_job(&user_id, &req.uuid).map_err(|e| {
             log::error!("Stop Request Error {:?}", e);
-            Status::unknown(NO_UUID_JOB)
+            Status::not_found(NO_UUID_JOB)
         })?;
 
         // Stop Job
@@ -89,17 +84,13 @@ impl JobProcessorService for JobProcessor {
         request: tonic::Request<StreamRequest>,
     ) -> Result<tonic::Response<Self::StreamStream>, tonic::Status> {
         log::info!("Stream Request");
-
-        // Authorize User
-        let user_id = tls::authorize_user(request.peer_certs())
-            .map_err(Status::unknown)?
-            .ok_or_else(|| Status::unknown("User is not authorized"))?;
+        let user_id = tls::get_authenticated_user_id(&request)?;
 
         // Get Job
         let req = request.into_inner();
         let job = self.get_users_job(&user_id, &req.uuid).map_err(|e| {
             log::error!("Stream Request Error {:?}", e);
-            Status::unknown(NO_UUID_JOB)
+            Status::not_found(NO_UUID_JOB)
         })?;
 
         // Initialize a channel, send the client the receiver and forward
@@ -120,10 +111,7 @@ impl JobProcessorService for JobProcessor {
         request: Request<StatusRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
         log::info!("Status Request");
-        // Authorize user
-        let user_id = tls::authorize_user(request.peer_certs())
-            .map_err(Status::unknown)?
-            .ok_or_else(|| Status::unknown("User is not authorized"))?;
+        let user_id = tls::get_authenticated_user_id(&request)?;
 
         // Get job
         let req = request.into_inner();

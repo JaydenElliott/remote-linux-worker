@@ -8,7 +8,7 @@ use crate::server::api::JobProcessor;
 use crate::utils::{
     errors::RLWServerError,
     job_processor_api::job_processor_service_server::JobProcessorServiceServer,
-    tls::{configure_server_tls, ipv6_address_validator},
+    tls::{authentication_interceptor, configure_server_tls, ipv6_address_validator},
 };
 
 use tonic::transport;
@@ -47,7 +47,8 @@ impl Server {
 
         // Configure and initialize the server
         let processor = JobProcessor::new();
-        let svc = JobProcessorServiceServer::new(processor);
+        let svc =
+            JobProcessorServiceServer::with_interceptor(processor, authentication_interceptor);
         let tls_config =
             configure_server_tls(&self.config.key, &self.config.cert, &self.config.client_ca)?;
 

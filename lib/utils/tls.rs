@@ -10,13 +10,9 @@ use std::{
     fs, io,
     net::{SocketAddr, SocketAddrV6},
     str::FromStr,
-    sync::Arc,
 };
-use tonic::transport::ServerTlsConfig;
+use tonic::{transport::ServerTlsConfig, Request, Status};
 use x509_parser::{extensions::ParsedExtension, prelude::X509Certificate, traits::FromDer};
-
-// To avoid privileged ports
-const PORT_MIN: u16 = 1024;
 
 /// Configure the custom mTLS settings for the gRPC server
 pub fn configure_server_tls(
@@ -91,31 +87,22 @@ fn load_private_key(path: &str) -> Result<PrivateKey, io::Error> {
     }
 }
 
-/// Parses an x509 certificate, returning any RFC822 name found in the SAN extension.
-///
-/// Will only search the last certificate in the chain for user identification.
-/// # Arguments
-/// - `certificates` - client certificate chain obtained from tonic::request::peer_certs().
-///             
-pub fn authorize_user(
-    certificates: Option<Arc<Vec<tonic::transport::Certificate>>>,
-) -> Result<Option<String>, String> {
-    // No certificates are used in unit tests
-    if cfg!(test) {
-        return Ok(Some("testuser@foo.com".to_string()));
-    }
+/// Intercepts gRPC requests to authenticate users and provide the server with the user ID.
 
-    // Extract final certificate in chain
-    let certificate = certificates
-        .ok_or_else(|| "No certificates found".to_string())?
+/// User ID will be any RFC822 name found in the x509 certificate SAN extension.
+/// Will only search the last certificate in the chain for user identification.
+pub fn authentication_interceptor(mut req: Request<()>) -> Result<Request<()>, Status> {
+    let certificate = req
+        .peer_certs()
+        .ok_or_else(|| Status::unauthenticated("User did not provide valid certificates"))?
         .last()
-        .ok_or_else(|| "No certificates found".to_string())?
+        .ok_or_else(|| Status::unauthenticated("User did not provide valid certificates"))?
         .clone()
         .into_inner();
 
     // Parse certificate
     let (_, cert) = X509Certificate::from_der(&certificate)
-        .map_err(|e| format!("Invalid certificate: {:?}", e))?;
+        .map_err(|_| Status::unauthenticated("User did not provide valid certificates"))?;
 
     // Get RFC822 name from SAN extension
     for ext in cert.extensions() {
@@ -123,27 +110,42 @@ pub fn authorize_user(
         if let ParsedExtension::SubjectAlternativeName(san) = parsed_ext {
             for name in &san.general_names {
                 if let x509_parser::extensions::GeneralName::RFC822Name(email) = name {
-                    return Ok(Some(email.to_string()));
+                    // return Ok(Some(email.to_string()));
+                    req.extensions_mut().insert(AuthenticatedUser {
+                        id: email.to_string(),
+                    });
+                    return Ok(req);
                 }
             }
         }
     }
     // No RFC822 name found in cert
-    Ok(None)
+    Err(Status::unauthenticated("User is unauthenticated"))
 }
 
+/// Returns an authenticated user's id obtained from the gRPC request's extensions.
+pub fn get_authenticated_user_id<T>(req: &Request<T>) -> Result<String, Status> {
+    if cfg!(test) {
+        return Ok("testuser@foo.com".to_string());
+    }
+    Ok(req
+        .extensions()
+        .get::<AuthenticatedUser>()
+        .ok_or_else(|| Status::unauthenticated("User is unauthenticated"))?
+        .id
+        .clone())
+}
+
+/// Stores an authenticated user's id.
+struct AuthenticatedUser {
+    pub id: String,
+}
 /// Ipv6 address parser and validator
 ///
-/// Returns a generic address to integrate with the tonic server
+/// Validates the Ipv6 address then converts it into a generic address to integrate with the tonic server
 pub fn ipv6_address_validator(address: &str) -> Result<SocketAddr, RLWServerError> {
     let addr = SocketAddrV6::from_str(address)
         .map_err(|e| RLWServerError(format!("Invalid Ipv6 address {:?}", e)))?;
 
-    if addr.port() < PORT_MIN {
-        return Err(RLWServerError(format!(
-            "Invalid port number. Must be greater than {}",
-            PORT_MIN
-        )));
-    }
     Ok(SocketAddr::from(addr))
 }
