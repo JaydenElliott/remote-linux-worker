@@ -43,7 +43,7 @@ impl JobProcessorService for JobProcessor {
         let user_id = tls::get_authenticated_user_id(&request)?;
         let user = self.get_user(&user_id).map_err(|e| {
             log::error!("Start request error: {:?}", e);
-            Status::unknown("Server Error")
+            Status::unknown(GENERAL_SERVER_ERR)
         })?;
 
         // Start Job
@@ -52,7 +52,7 @@ impl JobProcessorService for JobProcessor {
             .start_new_job(req.command, req.arguments)
             .map_err(|e| {
                 log::error!("Start request error: {:?}", e);
-                Status::unknown("Server Error")
+                Status::unknown(GENERAL_SERVER_ERR)
             })?;
         Ok(Response::new(StartResponse { uuid }))
     }
@@ -117,7 +117,7 @@ impl JobProcessorService for JobProcessor {
         let req = request.into_inner();
         let job = self.get_users_job(&user_id, &req.uuid).map_err(|e| {
             log::error!("Stream Request Error {:?}", e);
-            Status::unknown(NO_UUID_JOB)
+            Status::not_found(NO_UUID_JOB)
         })?;
 
         // Get status
