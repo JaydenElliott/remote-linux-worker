@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package job_processor;
+package job_processor_api;
 
 import "google/protobuf/empty.proto";
 

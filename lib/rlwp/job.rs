@@ -1,15 +1,18 @@
 //! Exposes the job type and it's implementation to the server
 
-use crate::job_processor::*;
-use crate::processing::execute_command;
-use crate::{errors::RLWServerError, job_processor::status_response::ProcessStatus};
+use crate::rlwp::processing::execute_command;
+use crate::utils::errors::RLWServerError;
+use crate::utils::job_processor_api::{status_response::ProcessStatus, *};
 
 use nix::{sys::signal, unistd::Pid};
-use std::sync::{
-    mpsc::{self, Receiver, Sender},
-    Arc,
+use std::{
+    os::unix::prelude::ExitStatusExt,
+    process::ExitStatus,
+    sync::{
+        mpsc::{self, Receiver, Sender},
+        Arc,
+    },
 };
-use std::{os::unix::prelude::ExitStatusExt, process::ExitStatus};
 use synchronoise::SignalEvent;
 use tokio::sync::{mpsc as tokio_mpsc, Mutex};
 use tonic::Status;
@@ -30,9 +33,8 @@ pub struct Job {
     pub output_signal: Arc<SignalEvent>,
 }
 
-impl Job {
-    /// Construct a new Job
-    pub fn new() -> Self {
+impl Default for Job {
+    fn default() -> Self {
         Self {
             status: Mutex::new(status_response::ProcessStatus::Running(false)),
             output: Mutex::new(Vec::new()),
@@ -40,7 +42,9 @@ impl Job {
             output_signal: Arc::new(SignalEvent::manual(false)),
         }
     }
+}
 
+impl Job {
     /// Starts a new process and populates the job pid, output and status from the process.
     ///
     /// # Arguments
@@ -55,10 +59,10 @@ impl Job {
         let (tx_output, rx_output): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
         let (tx_pid, rx_pid): (Sender<u32>, Receiver<u32>) = mpsc::channel();
 
-        // Process job
-        let thread = tokio::task::spawn_blocking(move || -> Result<ExitStatus, RLWServerError> {
-            execute_command(command, args, Some(&tx_pid), &tx_output)
-        });
+        let thread: tokio::task::JoinHandle<Result<ExitStatus, RLWServerError>> =
+            tokio::task::spawn_blocking(move || {
+                execute_command(command, args, Some(tx_pid), tx_output)
+            });
 
         // Set Process ID
         {
@@ -73,10 +77,9 @@ impl Job {
         }
 
         // Populate stdout/stderr output
-        let new_output = self.output_signal.clone();
         for rec in rx_output {
             self.output.lock().await.extend(rec);
-            new_output.signal();
+            self.output_signal.signal();
         }
 
         let thread_status = thread
@@ -139,18 +142,20 @@ impl Job {
     ) -> Result<(), RLWServerError> {
         // Maintain an index into job.output representing
         // what has been already been streamed.
-        let mut read_idx;
+        let mut read_idx = 0;
 
         // Send the client the job history
         {
             let output_guard = self.output.lock().await;
-            tx_stream
-                .send(Ok(StreamResponse {
-                    output: output_guard.clone(),
-                }))
-                .await?;
+            if output_guard.len() > 0 {
+                tx_stream
+                    .send(Ok(StreamResponse {
+                        output: output_guard.clone(),
+                    }))
+                    .await?;
 
-            read_idx = output_guard.len();
+                read_idx = output_guard.len();
+            }
         }
 
         // While the job is running wait until there is a new output signal.
@@ -158,7 +163,6 @@ impl Job {
         let new_output_signal = self.output_signal.clone();
         while let status_response::ProcessStatus::Running(true) = *self.status.lock().await {
             new_output_signal.wait();
-
             // New output has been added. Send this to the client.
             let output = self.output.lock().await;
             if read_idx < output.len() {
@@ -207,11 +211,11 @@ mod tests {
     #[tokio::test]
     async fn test_new_job() -> Result<(), RLWServerError> {
         // Setup
-        let job = Job::new();
+        let job = Job::default();
         let command = "echo".to_string();
         let test_string = "hello_test_new_job".to_string();
 
-        // Start
+        // Start request
         job.start_command(command, vec![test_string.clone()])
             .await?;
 
@@ -234,14 +238,14 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_stop() -> Result<(), RLWServerError> {
         // Setup First Job
-        let first_job = Job::new();
+        let first_job = Job::default();
         let command1 = "/bin/bash".to_string();
         let args1 = vec![TESTING_SCRIPTS_DIR.to_string() + "stop_job.sh"];
 
         let first_output_len = Arc::new(AtomicUsize::new(0));
 
-        // Setup Second Job
-        let second_job = Job::new();
+        // Setup second job
+        let second_job = Job::default();
         let job2_arc = Arc::new(second_job);
         let command2 = "/bin/bash".to_string();
         let args2 = vec![TESTING_SCRIPTS_DIR.to_string() + "stop_job.sh"];
